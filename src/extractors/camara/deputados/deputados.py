@@ -45,5 +45,5 @@ class DeputadosExtractor(CamaraBaseExtractor):
 
                 all_deputados.extend(data)
                 page += 1
-
+        
         return all_deputados
