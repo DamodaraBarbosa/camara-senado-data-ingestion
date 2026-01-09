@@ -1,6 +1,6 @@
 import requests
 
-class CamaraCliente:
+class CamaraClient:
     def __init__(self, url='https://dadosabertos.camara.leg.br/api/v2/'):
         self.url = url
 
