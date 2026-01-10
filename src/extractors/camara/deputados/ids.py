@@ -13,7 +13,7 @@ class IdsExtractor(CamaraBaseExtractor):
             if deputado_id not in deputados_ids:
                 deputados_ids.append(deputado_id)
 
-        for index, id in enumerate(deputados_ids):
+        for id in deputados_ids:
             response = self.client.get(f'{self.ENDPOINT}{id}')
             data = response.get('dados', {})
             all_ids.append(data)
