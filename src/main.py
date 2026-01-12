@@ -5,6 +5,7 @@ from extractors.camara.deputados.discursos import DiscursosExtractor
 from extractors.camara.deputados.ids import IdsExtractor
 from extractors.camara.deputados.despesas import DespesasExtractor
 from extractors.camara.deputados.eventos import EventosExtractor
+from extractors.camara.deputados.frentes import FrentesExtractor
 
 if __name__ == "__main__":
     client = CamaraClient()
@@ -21,6 +22,10 @@ if __name__ == "__main__":
     # discursos_data = discursos.extract(deputados=data, init_legislatura=57)
     # print(f'Total discursos extracted: {len(discursos_data)}')
 
-    eventos = EventosExtractor(client)
-    eventos_data = eventos.extract(deputados=data, init_legislatura=56)
-    print(eventos_data)
+    # eventos = EventosExtractor(client)
+    # eventos_data = eventos.extract(deputados=data, init_legislatura=56)
+    # print(eventos_data)
+
+    frentes = FrentesExtractor(client)
+    frentes_data = frentes.extract(deputados=data)
+    print(frentes_data)

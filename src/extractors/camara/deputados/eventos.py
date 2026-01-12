@@ -44,7 +44,6 @@ class EventosExtractor(CamaraBaseExtractor):
                     for evento in data:
                         evento['deputado_id'] = deputado_id
                     
-                    print(f'ID: {deputado_id} | Page: {page} | Data ID: {data[0].get("deputado_id", None)} | Data type: {type(data)}')
                     all_eventos.extend(data)
                     page += 1
 
