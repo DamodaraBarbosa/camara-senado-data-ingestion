@@ -8,11 +8,12 @@ from extractors.camara.deputados.eventos import EventosExtractor
 from extractors.camara.deputados.frentes import FrentesExtractor
 from extractors.camara.deputados.historico import HistoricoExtractor
 from extractors.camara.deputados.mandatos_externos import MandatosExternosExtractor
+from extractors.camara.deputados.ocupacoes import OcupacoesExtractor
 
 if __name__ == "__main__":
     client = CamaraClient()
     deputados = DeputadosExtractor(client)
-    data = deputados.extract(init_legislatura=57)[:30]
+    data = deputados.extract(init_legislatura=56)[:30]
     print(f'Total deputados extracted: {len(data)}')
     # ids = IdsExtractor(client)
     # ids_data = ids.extract(deputados=data)
@@ -36,6 +37,10 @@ if __name__ == "__main__":
     # historico_data = historico.extract(deputados=data)
     # print(historico_data)
 
-    mandatos_externos = MandatosExternosExtractor(client)
-    mandatos_externos_data = mandatos_externos.extract(deputados=data)
-    print(mandatos_externos_data)
+    # mandatos_externos = MandatosExternosExtractor(client)
+    # mandatos_externos_data = mandatos_externos.extract(deputados=data)
+    # print(mandatos_externos_data)
+
+    # ocupacoes = OcupacoesExtractor(client)
+    # ocupacoes_data = ocupacoes.extract(deputados=data)
+    # print(ocupacoes_data)
