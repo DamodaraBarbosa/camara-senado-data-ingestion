@@ -14,12 +14,11 @@ from extractors.camara.deputados.profissoes import ProfissoesExtractor
 from extractors.camara.deputados.lideres import LideresExtractor
 from extractors.camara.deputados.mesa import MesaExtractor
 from extractors.camara.deputados.codigo_situacao import CodigoSituacaoExtractor
-from extractors.camara.deputados.situacoes_deputados import SituacoesDeputadosExtractor
-
+# 
 if __name__ == "__main__":
     client = CamaraClient()
     deputados = DeputadosExtractor(client)
-    data = deputados.extract(init_legislatura=57)[:30]
+    data = deputados.extract(init_legislatura=56)
     print(f'Total deputados extracted: {len(data)}')
     # ids = IdsExtractor(client)
     # ids_data = ids.extract(deputados=data)
@@ -71,6 +70,6 @@ if __name__ == "__main__":
     # codigo_situacao_data = codigo_situacao.extract()
     # print(codigo_situacao_data)
 
-    situacoes_deputados = SituacoesDeputadosExtractor(client)
-    situacoes_deputados_data = situacoes_deputados.extract()
-    print(situacoes_deputados_data)
+    # situacoes_deputados = SituacoesDeputadosExtractor(client)
+    # situacoes_deputados_data = situacoes_deputados.extract()
+    # print(situacoes_deputados_data)

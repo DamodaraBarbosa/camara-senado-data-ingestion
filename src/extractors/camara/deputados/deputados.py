@@ -12,7 +12,8 @@ class DeputadosExtractor(CamaraBaseExtractor):
             sigla_uf: str = None,
             order_by: str = None,
             order: str = None,
-            items: int | str = None,
+            items: int = 1000,
+            request_tries: int = 4
         ):  
         legislaturas = self.client.get(self.LEGISLATURAS)['dados']
         current_legislatura = max(legislatura['id'] for legislatura in legislaturas)
@@ -22,28 +23,36 @@ class DeputadosExtractor(CamaraBaseExtractor):
 
         for legislatura in range(start, current_legislatura + 1):
             page = 1
+            empty_count = 0
 
-            while True:
-                params = {
-                    'idLegislatura': legislatura,
-                    'siglaUf': sigla_uf,
-                    'siglaPartido': sigla_partido,
-                    'siglaSexo': sigla_sexo,
-                    'ordernarPor': order_by,
-                    'ordem': order,
-                    'itens': items,
-                    'pagina': page
-                }
+            while empty_count < request_tries:
+                try:
+                    params = {
+                        'idLegislatura': legislatura,
+                        'siglaUf': sigla_uf,
+                        'siglaPartido': sigla_partido,
+                        'siglaSexo': sigla_sexo,
+                        'ordernarPor': order_by,
+                        'ordem': order,
+                        'itens': items,
+                        'pagina': page
+                    }
 
-                params = {k: v for k, v in params.items() if v is not None}
-            
-                response = self.client.get(self.ENDPOINT, params=params)
-                data = response.get('dados', [])
+                    params = {k: v for k, v in params.items() if v is not None}
+                
+                    response = self.client.get(self.ENDPOINT, params=params)
+                    data = response.get('dados', [])
 
-                if not data:
-                    break
+                    if not data:
+                        empty_count += 1
+                        page += 1
+                        continue
+                    
+                    print(f'Legislatura ID: {legislatura}, Page: {page}, Data Length: {len(data)}')
+                    all_deputados.extend(data)
+                    page += 1
 
-                all_deputados.extend(data)
-                page += 1
+                except Exception as e:
+                    print(f'Error while extracting deputados for legislatura {legislatura}, page {page}: {e}')
         
         return all_deputados
