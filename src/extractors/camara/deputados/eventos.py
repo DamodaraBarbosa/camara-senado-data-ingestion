@@ -7,9 +7,13 @@ class EventosExtractor(CamaraBaseExtractor):
     def extract(
             self, 
             deputados: json, 
+            init_legislatura: int = None,
             items: int = 50,
             request_tries: int = 4
         ):
+        legislatura = self.client.get('legislaturas', params={'id': init_legislatura})
+        start_legislatura_date = legislatura['dados'][0].get('dataInicio', None)
+
         deputados_ids = list(dict.fromkeys(deputado.get('id') for deputado in deputados if deputado.get('id')))
         all_eventos = []
 
@@ -21,6 +25,7 @@ class EventosExtractor(CamaraBaseExtractor):
                 try:
                     params = {
                         'itens': items,
+                        'dataInicio': start_legislatura_date,
                         'pagina': page
                     }
 
