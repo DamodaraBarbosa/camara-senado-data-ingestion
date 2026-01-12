@@ -1,0 +1,26 @@
+from extractors.camara.base import CamaraBaseExtractor
+import json
+
+class HistoricoExtractor(CamaraBaseExtractor):
+    ENDPOINT = 'deputados/{id}/historico'
+
+    def extract(self, deputados: json):
+        deputados_ids = list(dict.fromkeys(deputado.get('id') for deputado in deputados if deputado.get('id')))
+        all_historico = []
+
+        try:
+            for deputado_id in deputados_ids:
+                response = self.client.get(self.ENDPOINT.format(id=deputado_id))
+                data = response.get('dados', [])
+                
+                for historico in data:
+                    historico['deputado_id'] = deputado_id
+                
+                print(f'ID: {deputado_id} | Data ID: {data[0].get("deputado_id", None)} | Data length: {len(data)}')  
+
+                all_historico.extend(data)
+
+        except Exception as e:
+            print(f'Error while extracting historico for deputado {deputado_id}: {e}')
+
+        return all_historico
