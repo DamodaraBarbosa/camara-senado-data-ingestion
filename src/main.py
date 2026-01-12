@@ -9,6 +9,7 @@ from extractors.camara.deputados.frentes import FrentesExtractor
 from extractors.camara.deputados.historico import HistoricoExtractor
 from extractors.camara.deputados.mandatos_externos import MandatosExternosExtractor
 from extractors.camara.deputados.ocupacoes import OcupacoesExtractor
+from extractors.camara.deputados.orgaos import OrgaosExtractor
 
 if __name__ == "__main__":
     client = CamaraClient()
@@ -44,3 +45,7 @@ if __name__ == "__main__":
     # ocupacoes = OcupacoesExtractor(client)
     # ocupacoes_data = ocupacoes.extract(deputados=data)
     # print(ocupacoes_data)
+
+    orgaos = OrgaosExtractor(client)
+    orgaos_data = orgaos.extract(deputados=data, init_legislatura=57)
+    print(f'Total orgaos extracted: {orgaos_data}')
