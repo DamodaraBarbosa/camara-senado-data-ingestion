@@ -18,14 +18,14 @@ from extractors.camara.deputados.codigo_situacao import CodigoSituacaoExtractor
 if __name__ == "__main__":
     client = CamaraClient()
     deputados = DeputadosExtractor(client)
-    data = deputados.extract(init_legislatura=56)
+    data = deputados.extract(init_legislatura=56)[:30]
     print(f'Total deputados extracted: {len(data)}')
     # ids = IdsExtractor(client)
     # ids_data = ids.extract(deputados=data)
     
-    # despesas = DespesasExtractor(client)
-    # despesas_data = despesas.extract(deputados=data, init_year=2025)
-    # print(f'Total despesas extracted: {despesas_data}')
+    despesas = DespesasExtractor(client)
+    despesas_data = despesas.extract(deputados=data, init_legislatura=56)
+    print(f'Total despesas extracted: {despesas_data}')
     # discursos = DiscursosExtractor(client)
     # discursos_data = discursos.extract(deputados=data, init_legislatura=57)
     # print(f'Total discursos extracted: {len(discursos_data)}')

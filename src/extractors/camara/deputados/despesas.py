@@ -8,19 +8,22 @@ class DespesasExtractor(CamaraBaseExtractor):
     def extract(
             self, 
             deputados: json, 
-            init_year: int = None, 
+            init_legislatura: int = None, 
             month: int = None, 
-            items: int = 50,
+            items: int = 1000,
             request_tries: int = 4
         ):
-    
-        all_expenses = []
+        legislatura = self.client.get('legislaturas', params={'id': init_legislatura})
+        start_legislatura_date = legislatura['dados'][0].get('dataInicio', None)
+        start_legislatura_year = int(start_legislatura_date.split('-')[0]) if start_legislatura_date else None
+
+        current_year = datetime.now().year
+        start_year = start_legislatura_year if start_legislatura_year is not None else current_year
+        years_range = [range(start_year, current_year + 1)]
 
         deputados_ids = list(dict.fromkeys(deputado.get('id') for deputado in deputados if deputado.get('id')))
-        
-        current_year = datetime.now().year
-        start_year = init_year if init_year is not None else current_year
-        years_range = [range(start_year, current_year + 1)]
+
+        all_expenses = []
  
         for  deputado_id in deputados_ids:
             page = 1
