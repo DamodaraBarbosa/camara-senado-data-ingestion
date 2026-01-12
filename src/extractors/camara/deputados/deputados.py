@@ -48,7 +48,6 @@ class DeputadosExtractor(CamaraBaseExtractor):
                         page += 1
                         continue
                     
-                    print(f'Legislatura ID: {legislatura}, Page: {page}, Data Length: {len(data)}')
                     all_deputados.extend(data)
                     page += 1
 
