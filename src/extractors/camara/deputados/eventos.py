@@ -1,38 +1,27 @@
 from extractors.camara.base import CamaraBaseExtractor
-from datetime import datetime
 import json
 
-class DespesasExtractor(CamaraBaseExtractor):
-    ENDPOINT = 'deputados/{id}/despesas'
+class EventosExtractor(CamaraBaseExtractor):
+    ENDPOINT = 'deputados/{id}/eventos'
 
     def extract(
             self, 
             deputados: json, 
-            init_year: int = None, 
-            month: int = None, 
             items: int = 50,
             request_tries: int = 4
         ):
-    
-        all_expenses = []
-
         deputados_ids = list(dict.fromkeys(deputado.get('id') for deputado in deputados if deputado.get('id')))
-        
-        current_year = datetime.now().year
-        start_year = init_year if init_year is not None else current_year
-        years_range = [range(start_year, current_year + 1)]
- 
-        for  deputado_id in deputados_ids:
+        all_eventos = []
+
+        for deputado_id in deputados_ids:
             page = 1
             empty_count = 0
 
             while empty_count < request_tries:
                 try:
                     params = {
-                        'ano': years_range,
-                        'mes': month,
-                        'pagina': page,
-                        'itens': items
+                        'itens': items,
+                        'pagina': page
                     }
 
                     params = {k: v for k, v in params.items() if v is not None}
@@ -47,13 +36,14 @@ class DespesasExtractor(CamaraBaseExtractor):
 
                     empty_count = 0
 
-                    for despesa in data:
-                        despesa['deputado_id'] = deputado_id
-
-                    all_expenses.extend(data)
+                    for evento in data:
+                        evento['deputado_id'] = deputado_id
+                    
+                    print(f'ID: {deputado_id} | Page: {page} | Data ID: {data[0].get("deputado_id", None)} | Data type: {type(data)}')
+                    all_eventos.extend(data)
                     page += 1
 
                 except Exception as e:
-                    print(f'Error while extracting despesas for deputado {deputado_id}: {e}')
+                    print(f'Error while extracting eventos for deputado {deputado_id}: {e}')
 
-        return all_expenses
+        return all_eventos

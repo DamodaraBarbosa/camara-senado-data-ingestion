@@ -13,7 +13,7 @@ class DeputadosExtractor(CamaraBaseExtractor):
             order_by: str = None,
             order: str = None,
             items: int | str = None,
-    ):
+        ):  
         legislaturas = self.client.get(self.LEGISLATURAS)['dados']
         current_legislatura = max(legislatura['id'] for legislatura in legislaturas)
         
