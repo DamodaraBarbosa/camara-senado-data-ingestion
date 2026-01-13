@@ -14,18 +14,19 @@ from extractors.camara.deputados.profissoes import ProfissoesExtractor
 from extractors.camara.deputados.lideres import LideresExtractor
 from extractors.camara.deputados.mesa import MesaExtractor
 from extractors.camara.deputados.codigo_situacao import CodigoSituacaoExtractor
-# 
+from extractors.camara.proposicoes.proposicoes import ProposicoesExtractor
+
 if __name__ == "__main__":
     client = CamaraClient()
-    deputados = DeputadosExtractor(client)
-    data = deputados.extract(init_legislatura=56)[:30]
-    print(f'Total deputados extracted: {len(data)}')
+    # deputados = DeputadosExtractor(client)
+    # data = deputados.extract(init_legislatura=56)
+    # print(f'Total deputados extracted: {len(data)}')
     # ids = IdsExtractor(client)
     # ids_data = ids.extract(deputados=data)
     
-    despesas = DespesasExtractor(client)
-    despesas_data = despesas.extract(deputados=data, init_legislatura=56)
-    print(f'Total despesas extracted: {despesas_data}')
+    # despesas = DespesasExtractor(client)
+    # despesas_data = despesas.extract(deputados=data, init_legislatura=56)
+    # print(f'Total despesas extracted: {despesas_data}')
     # discursos = DiscursosExtractor(client)
     # discursos_data = discursos.extract(deputados=data, init_legislatura=57)
     # print(f'Total discursos extracted: {len(discursos_data)}')
@@ -73,3 +74,7 @@ if __name__ == "__main__":
     # situacoes_deputados = SituacoesDeputadosExtractor(client)
     # situacoes_deputados_data = situacoes_deputados.extract()
     # print(situacoes_deputados_data)
+
+    proposicoes = ProposicoesExtractor(client)
+    proposicoes_data = proposicoes.extract(init_legislatura=57)
+    print(f'Total proposicoes extracted: {len(proposicoes_data)}')

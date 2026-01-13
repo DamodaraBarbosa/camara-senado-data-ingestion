@@ -48,6 +48,7 @@ class DeputadosExtractor(CamaraBaseExtractor):
                         page += 1
                         continue
                     
+                    empty_count = 0
                     all_deputados.extend(data)
                     page += 1
 
