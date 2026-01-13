@@ -51,7 +51,6 @@ class ProposicoesExtractor(CamaraBaseExtractor):
                         page += 1
                         continue
                     
-                    print(f'Extracted {len(data)} proposicoes from page {page} for ano {ano}')
                     empty_count = 0
                     all_proposicoes.extend(data)
                     page += 1

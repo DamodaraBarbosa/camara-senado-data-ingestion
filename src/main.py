@@ -15,6 +15,7 @@ from extractors.camara.deputados.lideres import LideresExtractor
 from extractors.camara.deputados.mesa import MesaExtractor
 from extractors.camara.deputados.codigo_situacao import CodigoSituacaoExtractor
 from extractors.camara.proposicoes.proposicoes import ProposicoesExtractor
+from extractors.camara.proposicoes.ids import IdsExtractor
 
 if __name__ == "__main__":
     client = CamaraClient()
@@ -76,5 +77,9 @@ if __name__ == "__main__":
     # print(situacoes_deputados_data)
 
     proposicoes = ProposicoesExtractor(client)
-    proposicoes_data = proposicoes.extract(init_legislatura=57)
+    proposicoes_data = proposicoes.extract(init_legislatura=57, autor='Kim Kataguiri')
     print(f'Total proposicoes extracted: {len(proposicoes_data)}')
+
+    proposicoes_ids = IdsExtractor(client)
+    proposicoes_ids_data = proposicoes_ids.extract(proposicoes=proposicoes_data)
+    print(f'Total proposicoes ids extracted: {proposicoes_ids_data}')
