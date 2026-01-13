@@ -17,6 +17,8 @@ from extractors.camara.deputados.codigo_situacao import CodigoSituacaoExtractor
 from extractors.camara.proposicoes.proposicoes import ProposicoesExtractor
 from extractors.camara.proposicoes.ids import IdsExtractor
 from extractors.camara.proposicoes.autores import AutoresExtractor
+from extractors.camara.proposicoes.relacionadas import RelacionadasExtractor
+from extractors.camara.proposicoes.temas import TemasExtractor
 
 if __name__ == "__main__":
     client = CamaraClient()
@@ -85,6 +87,14 @@ if __name__ == "__main__":
     # proposicoes_ids_data = proposicoes_ids.extract(proposicoes=proposicoes_data)
     # print(f'Total proposicoes ids extracted: {proposicoes_ids_data}')
 
-    autores = AutoresExtractor(client)
-    autores_data = autores.extract(proposicoes=proposicoes_data)
-    print(f'Total autores extracted: {autores_data}')
+    # autores = AutoresExtractor(client)
+    # autores_data = autores.extract(proposicoes=proposicoes_data)
+    # print(f'Total autores extracted: {autores_data}')
+
+    # relacionadas = RelacionadasExtractor(client)
+    # relacionadas_data = relacionadas.extract(proposicoes=proposicoes_data)
+    # print(f'Total relacionadas extracted: {relacionadas_data}')
+
+    temas = TemasExtractor(client)
+    temas_data = temas.extract(proposicoes=proposicoes_data)
+    print(f'Total temas extracted: {len(temas_data)}')
