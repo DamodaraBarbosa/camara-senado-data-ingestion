@@ -58,4 +58,4 @@ class ProposicoesExtractor(CamaraBaseExtractor):
                 except Exception as e:
                     print(f'Error while extracting proposicoes: {e}')
 
-        return all_proposicoes[:100]
+        return all_proposicoes
