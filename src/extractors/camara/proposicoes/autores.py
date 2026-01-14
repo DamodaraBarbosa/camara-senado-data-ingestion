@@ -17,7 +17,7 @@ class AutoresExtractor(CamaraBaseExtractor):
                 data = response.get('dados', [])
 
                 for autor in data:
-                    autor['proposicao_id'] = proposicao_id
+                    autor['idProposicao'] = proposicao_id
 
                 all_autores.extend(data)
 
