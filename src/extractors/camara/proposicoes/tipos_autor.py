@@ -7,7 +7,6 @@ class TiposAutorExtractor(CamaraBaseExtractor):
         try:
             response = self.client.get(self.ENDPOINT)
             data = response.get('dados', [])
-
             return data
         
         except Exception as e:

@@ -1,7 +1,7 @@
 from extractors.camara.base import CamaraBaseExtractor
 
-class TiposProposicaoExtractor(CamaraBaseExtractor):
-    ENDPOINT = 'referencias/tiposProposicao'
+class TiposTramitacaoExtractor(CamaraBaseExtractor):
+    ENDPOINT = 'referencias/tiposTramitacao'
 
     def extract(self):
         try:
@@ -10,5 +10,5 @@ class TiposProposicaoExtractor(CamaraBaseExtractor):
             return data
         
         except Exception as e:
-            print(f'Error while extracting tipos proposicao: {e}')
+            print(f'Error while extracting tipos tramitacao: {e}')
             return []
