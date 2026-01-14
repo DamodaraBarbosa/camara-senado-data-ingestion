@@ -1,7 +1,7 @@
 from extractors.camara.base import CamaraBaseExtractor
 
-class CodigoSituacaoExtractor(CamaraBaseExtractor):
-    ENDPOINT = 'referencias/proposicoes/codSituacao'
+class CodigoTipoAutorExtractor(CamaraBaseExtractor):
+    ENDPOINT = 'referencias/proposicoes/codTipoAutor'
 
     def extract(self):
         try:
@@ -10,5 +10,5 @@ class CodigoSituacaoExtractor(CamaraBaseExtractor):
             return data
         
         except Exception as e:
-            print(f'Error while extracting codigo situacao: {e}')
+            print(f'Error while extracting codigo tipo autor: {e}')
             return []
