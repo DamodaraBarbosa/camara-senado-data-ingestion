@@ -19,6 +19,8 @@ from extractors.camara.proposicoes.ids import IdsExtractor
 from extractors.camara.proposicoes.autores import AutoresExtractor
 from extractors.camara.proposicoes.relacionadas import RelacionadasExtractor
 from extractors.camara.proposicoes.temas import TemasExtractor
+from extractors.camara.proposicoes.tramitacoes import TramitacoesExtractor
+from extractors.camara.proposicoes.votacoes import VotacoesExtractor
 
 if __name__ == "__main__":
     client = CamaraClient()
@@ -80,7 +82,7 @@ if __name__ == "__main__":
     # print(situacoes_deputados_data)
 
     proposicoes = ProposicoesExtractor(client)
-    proposicoes_data = proposicoes.extract(init_legislatura=57, autor='Kim Kataguiri')
+    proposicoes_data = proposicoes.extract(init_legislatura=56, autor='Kim Kataguiri')
     print(f'Total proposicoes extracted: {len(proposicoes_data)}')
 
     # proposicoes_ids = IdsExtractor(client)
@@ -95,6 +97,14 @@ if __name__ == "__main__":
     # relacionadas_data = relacionadas.extract(proposicoes=proposicoes_data)
     # print(f'Total relacionadas extracted: {relacionadas_data}')
 
-    temas = TemasExtractor(client)
-    temas_data = temas.extract(proposicoes=proposicoes_data)
-    print(f'Total temas extracted: {len(temas_data)}')
+    # temas = TemasExtractor(client)
+    # temas_data = temas.extract(proposicoes=proposicoes_data)
+    # print(f'Total temas extracted: {len(temas_data)}')
+
+    # tramitacoes = TramitacoesExtractor(client)
+    # tramitacoes_data = tramitacoes.extract(proposicoes=proposicoes_data)
+    # print(tramitacoes_data)
+
+    votacoes = VotacoesExtractor(client)
+    votacoes_data = votacoes.extract(proposicoes=proposicoes_data)
+    print(f'Total votacoes extracted: {len(votacoes_data)}')
