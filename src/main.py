@@ -22,6 +22,7 @@ from extractors.camara.proposicoes.temas import TemasExtractor
 from extractors.camara.proposicoes.tramitacoes import TramitacoesExtractor
 from extractors.camara.proposicoes.votacoes import VotacoesExtractor
 from extractors.camara.proposicoes.codigo_tema import CodigoTemaExtractor
+from extractors.camara.proposicoes.codigo_tipo_tramitacao import CodigoTipoTramitacaoExtractor
 
 if __name__ == "__main__":
     client = CamaraClient()
@@ -110,6 +111,10 @@ if __name__ == "__main__":
     # votacoes_data = votacoes.extract(proposicoes=proposicoes_data)
     # print(f'Total votacoes extracted: {len(votacoes_data)}')
 
-    codigo_tema = CodigoTemaExtractor(client)
-    codigo_tema_data = codigo_tema.extract()
-    print(codigo_tema_data)
+    # codigo_tema = CodigoTemaExtractor(client)
+    # codigo_tema_data = codigo_tema.extract()
+    # print(codigo_tema_data)
+
+    codigo_tipo_tramitacao = CodigoTipoTramitacaoExtractor(client)
+    codigo_tipo_tramitacao_data = codigo_tipo_tramitacao.extract()
+    print(codigo_tipo_tramitacao_data)
