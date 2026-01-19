@@ -17,14 +17,14 @@ async def main():
     print(f'Total votacoes extracted: {len(votacoes_data)}')
     print(f'Time elapsed: {end - start}')
 
-    votacoes_ids = AsyncVotacoesIdsExtractor(client)
-    start = datetime.now()
+    # votacoes_ids = AsyncVotacoesIdsExtractor(client)
+    # start = datetime.now()
 
-    votacoes_ids_data = await votacoes_ids.extract(votacoes_data)
-    end = datetime.now()
+    # votacoes_ids_data = await votacoes_ids.extract(votacoes_data)
+    # end = datetime.now()
 
-    print(f'Total votacoes ids extracted: {len(votacoes_ids_data)}')
-    print(f'Time elapsed: {end - start}')
+    # print(f'Total votacoes ids extracted: {len(votacoes_ids_data)}')
+    # print(f'Time elapsed: {end - start}')
 
     orientacoes = AsyncVotacoesOrientacoes(client)
     start = datetime.now()
@@ -33,7 +33,7 @@ async def main():
     end = datetime.now()
 
     print(f'Total orientacoes extracted: {len(orientacoes_data)}')
-    print(f'Time elapsed: {end - start})
+    print(f'Time elapsed: {end - start}')
 
 if __name__ == '__main__':
     asyncio.run(main())

@@ -45,8 +45,6 @@ class AsyncVotacoesExtractor(CamaraBaseExtractor):
                 for votacao in data:
                     votacao['idLegislatura'] = id_legislatura
 
-                print(f'[OK] Fetched: {current_start_date} | Page: {page} | Items: {len(data)}')
-
                 extracted_data.extend(data)
                 empty_count = 0
                 page += 1
