@@ -6,9 +6,14 @@ from tenacity import retry, stop_after_attempt, wait_exponential
 class AsyncCamaraClient:
     def __init__(self, url='https://dadosabertos.camara.leg.br/api/v2/'):
         self.url = url
-        self.semaphore = asyncio.Semaphore(5)
+        self._semaphore = None
 
-
+    @property
+    def semaphore(self):
+        if self._semaphore is None:
+            self._semaphore = asyncio.Semaphore(5)
+        return self._semaphore
+            
     @retry(
         stop=stop_after_attempt(5),
         wait=wait_exponential(multiplier=1, min=2, max=12)
@@ -22,10 +27,18 @@ class AsyncCamaraClient:
 
         async with self.semaphore:
             async with session.get(url, params=params, timeout=30) as response:
-                response.raise_for_status()
-        
-                text = await response.text()
-                if not text:
-                    return {}
+                try: 
+                    response.raise_for_status()
+                    if response.status == 429:
+                        wait_time = response.headers.get('Retry-After', '30')
+                        await asyncio.sleep(int(wait_time))
+            
+                    text = await response.text()
+                    if not text:
+                        return {}
 
-                return await response.json()
+                    return await response.json()
+                
+                except Exception as e:
+                    print(f'Error: {e}')
+                    return {}
