@@ -9,9 +9,6 @@ class AsyncVotacoesExtractor(CamaraBaseExtractor):
     LEGISLATURA = 'legislaturas'
 
     async def _fetch_period_pages(self, session, id_legislatura, current_start_date, request_tries, id_proposicao, id_evento, id_orgao, itens):
-        """
-        Busca todas as páginas de votações para um determinado período.
-        """
         base_params = {
             'idProposicao': id_proposicao,
             'idEvento': id_evento,
@@ -22,7 +19,7 @@ class AsyncVotacoesExtractor(CamaraBaseExtractor):
         extracted_data = []
         page = 1
         empty_count = 0
-        current_params = {}  # Definir antes do try para garantir que exista no except
+        current_params = {}  
 
         while empty_count < request_tries:
             try:
@@ -53,7 +50,6 @@ class AsyncVotacoesExtractor(CamaraBaseExtractor):
                 print(f'Error fetching votacoes from API with params {current_params}. Error: {e}')
                 break
         
-        # A instrução de retorno deve estar fora do loop 'while'
         return extracted_data
 
     async def extract(
@@ -72,8 +68,7 @@ class AsyncVotacoesExtractor(CamaraBaseExtractor):
 
             current_year = datetime.now().year
             start_year = start_legislatura_year if start_legislatura_year else current_year
-            # years_range = range(start_year, current_year + 1)
-            years_range = [2022]
+            years_range = range(start_year, current_year + 1)
 
             tasks = []
 
@@ -95,7 +90,6 @@ class AsyncVotacoesExtractor(CamaraBaseExtractor):
                         id_legislatura=id_legislatura,
                         current_start_date=temp_date,
                         request_tries=request_tries,
-                        # Passar os parâmetros que faltavam
                         id_proposicao=id_proposicao,
                         id_evento=id_evento,
                         id_orgao=id_orgao,
@@ -110,7 +104,6 @@ class AsyncVotacoesExtractor(CamaraBaseExtractor):
             print(f'Starting parallels {len(tasks)} tasks')
             results = await asyncio.gather(*tasks)
 
-            # Aplaina a lista de listas em uma única lista
             all_votacoes = [item for sublist in results if sublist for item in sublist]
 
             return all_votacoes
