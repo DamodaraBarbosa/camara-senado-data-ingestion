@@ -1,7 +1,7 @@
-from clients.camara_client import CamaraClient
+from clients.camara_client import AsyncCamaraClient
 
 class CamaraBaseExtractor:
-    def __init__(self, client: CamaraClient, params: dict = None):
+    def __init__(self, client: AsyncCamaraClient, params: dict = None):
         self.client = client
         self.params = params or {}
 

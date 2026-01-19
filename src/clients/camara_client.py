@@ -1,14 +1,44 @@
+import asyncio
+import aiohttp
 import requests
+from tenacity import retry, stop_after_attempt, wait_exponential
 
-class CamaraClient:
+class AsyncCamaraClient:
     def __init__(self, url='https://dadosabertos.camara.leg.br/api/v2/'):
         self.url = url
+        self._semaphore = None
 
-    def get(self, endpoint: str, params: dict = None):
+    @property
+    def semaphore(self):
+        if self._semaphore is None:
+            self._semaphore = asyncio.Semaphore(5)
+        return self._semaphore
+            
+    @retry(
+        stop=stop_after_attempt(5),
+        wait=wait_exponential(multiplier=1, min=2, max=30)
+    )
+
+    async def get(self, session: aiohttp.ClientSession, endpoint: str, params: dict = None):
         if not endpoint:
             raise ValueError('The endpoint parameter must be not empty.')
         
         url = f'{self.url}{endpoint}'
-        request = requests.get(url, params=params)
 
-        return request.json()
+        async with self.semaphore:
+            async with session.get(url, params=params, timeout=30) as response:
+                try: 
+                    response.raise_for_status()
+                    if response.status == 429:
+                        wait_time = response.headers.get('Retry-After', '30')
+                        await asyncio.sleep(int(wait_time))
+            
+                    text = await response.text()
+                    if not text:
+                        return {}
+
+                    return await response.json()
+                
+                except Exception as e:
+                    print(f'Error: {e}')
+                    return {}
