@@ -18,7 +18,6 @@ class AsyncVotosExtractor(CamaraBaseExtractor):
 
             for votacao_id in votacoes_ids:
                 task = self.client.get(session, self.ENDPOINT.format(id=votacao_id))
-                print(f'ID: {votacao_id}')
                 tasks.append(task)
 
             results = await asyncio.gather(*tasks)
