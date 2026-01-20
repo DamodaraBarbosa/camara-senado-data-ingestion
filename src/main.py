@@ -1,8 +1,7 @@
 from clients.camara_client import AsyncCamaraClient
-from extractors.camara.base import CamaraBaseExtractor
 from extractors.camara.votacoes.votacoes import AsyncVotacoesExtractor
-from extractors.camara.votacoes.ids import AsyncVotacoesIdsExtractor
 from extractors.camara.votacoes.orientacoes import AsyncVotacoesOrientacoes
+from extractors.camara.votacoes.votos import AsyncVotosExtractor
 import asyncio
 from datetime import datetime
 
@@ -29,9 +28,10 @@ async def main():
     orientacoes = AsyncVotacoesOrientacoes(client)
     start = datetime.now()
 
-    orientacoes_data = await orientacoes.extract(votacoes_data)
+    orientacoes_data = await orientacoes.extract(votacoes_data[:100])
     end = datetime.now()
 
+    print(orientacoes_data)
     print(f'Total orientacoes extracted: {len(orientacoes_data)}')
     print(f'Time elapsed: {end - start}')
 

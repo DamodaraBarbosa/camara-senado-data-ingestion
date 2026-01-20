@@ -68,7 +68,8 @@ class AsyncVotacoesExtractor(CamaraBaseExtractor):
 
             current_year = datetime.now().year
             start_year = start_legislatura_year if start_legislatura_year else current_year
-            years_range = range(start_year, current_year + 1)
+            # years_range = range(start_year, current_year + 1)
+            years_range = [2023]
 
             tasks = []
 
