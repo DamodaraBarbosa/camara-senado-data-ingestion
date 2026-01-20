@@ -16,7 +16,7 @@ class AsyncCamaraClient:
             
     @retry(
         stop=stop_after_attempt(5),
-        wait=wait_exponential(multiplier=1, min=2, max=30)
+        wait=wait_exponential(multiplier=1, min=2, max=12)
     )
 
     async def get(self, session: aiohttp.ClientSession, endpoint: str, params: dict = None):
@@ -26,7 +26,7 @@ class AsyncCamaraClient:
         url = f'{self.url}{endpoint}'
 
         async with self.semaphore:
-            async with session.get(url, params=params, timeout=30) as response:
+            async with session.get(url, params=params, timeout=12) as response:
                 try: 
                     response.raise_for_status()
                     if response.status == 429:

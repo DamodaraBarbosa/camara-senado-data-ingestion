@@ -101,7 +101,6 @@ class AsyncVotacoesExtractor(CamaraBaseExtractor):
                     if temp_date > date.today():
                         break
 
-            print(f'Starting parallels {len(tasks)} tasks')
             results = await asyncio.gather(*tasks)
 
             all_votacoes = [item for sublist in results if sublist for item in sublist]
