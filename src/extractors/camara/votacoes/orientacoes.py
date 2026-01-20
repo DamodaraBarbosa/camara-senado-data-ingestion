@@ -28,7 +28,7 @@ class AsyncVotacoesOrientacoes(CamaraBaseExtractor):
                 
                 for orientacao in orientacoes:
                     orientacao['votacao_id'] = votacao_id
-
-            all_orientacoes.extend(results)
+                
+                all_orientacoes.extend(orientacoes)
 
         return all_orientacoes
