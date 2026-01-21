@@ -1,6 +1,6 @@
 from clients.camara_client import AsyncCamaraClient
 from extractors.camara.orgaos.orgaos import AsyncOrgaosExtractor
-from extractors.camara.orgaos.votacoes import AsyncOrgaosVotacoesExtractor
+from extractors.camara.orgaos.codigo_situacao import CodigoSituacaoOrgaoExtractor
 import asyncio
 from datetime import datetime
 
@@ -15,15 +15,15 @@ async def main():
     print(f'Total orgaos extracted: {len(orgaos_data)}')
     print(f'Time elapsed: {end - start}')
 
-    votacoes = AsyncOrgaosVotacoesExtractor(client)
+    codigo_situacao = CodigoSituacaoOrgaoExtractor(client)
 
     start = datetime.now()
 
-    votacoes_data = await votacoes.extract(orgaos=orgaos_data[:20], init_legislatura=56)
+    codigo_situacao_data = await codigo_situacao.extract()
 
     end = datetime.now()
 
-    print(f'Total membros extracted: {votacoes_data}')
+    print(f'Total codigos situacao: {codigo_situacao_data}')
     print(f'Time elapsed: {end - start}')
 
 if __name__ == '__main__':

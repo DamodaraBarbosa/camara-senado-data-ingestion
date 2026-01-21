@@ -24,7 +24,6 @@ class AsyncOrgaosIdsExtractor(CamaraBaseExtractor):
 
             for result in results:
                 ids_data = result.get('dados', {})
-
                 all_ids.append(ids_data)
 
         return all_ids
