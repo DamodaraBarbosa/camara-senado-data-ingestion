@@ -8,7 +8,17 @@ class AsyncVotacoesExtractor(CamaraBaseExtractor):
     ENDPOINT = 'votacoes'
     LEGISLATURA = 'legislaturas'
 
-    async def _fetch_period_pages(self, session, id_legislatura, current_start_date, request_tries, id_proposicao, id_evento, id_orgao, itens):
+    async def _fetch_period_pages(
+            self, 
+            session, 
+            id_legislatura, 
+            current_start_date, 
+            request_tries, 
+            id_proposicao, 
+            id_evento, 
+            id_orgao, 
+            itens
+        ):
         base_params = {
             'idProposicao': id_proposicao,
             'idEvento': id_evento,

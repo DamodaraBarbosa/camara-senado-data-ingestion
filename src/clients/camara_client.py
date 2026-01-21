@@ -1,7 +1,7 @@
 import asyncio
 import aiohttp
 import requests
-from tenacity import retry, stop_after_attempt, wait_exponential
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 
 class AsyncCamaraClient:
     def __init__(self, url='https://dadosabertos.camara.leg.br/api/v2/'):
@@ -15,8 +15,9 @@ class AsyncCamaraClient:
         return self._semaphore
             
     @retry(
+        wait=wait_exponential(multiplier=1, min=4, max=60),
         stop=stop_after_attempt(5),
-        wait=wait_exponential(multiplier=1, min=2, max=12)
+        retry=retry_if_exception_type(requests.exceptions.HTTPError),
     )
 
     async def get(self, session: aiohttp.ClientSession, endpoint: str, params: dict = None):
@@ -26,7 +27,7 @@ class AsyncCamaraClient:
         url = f'{self.url}{endpoint}'
 
         async with self.semaphore:
-            async with session.get(url, params=params, timeout=12) as response:
+            async with session.get(url, params=params, timeout=60) as response:
                 try: 
                     response.raise_for_status()
                     if response.status == 429:
