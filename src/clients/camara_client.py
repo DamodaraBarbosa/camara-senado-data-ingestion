@@ -15,7 +15,7 @@ class AsyncCamaraClient:
         return self._semaphore
             
     @retry(
-        wait=wait_exponential(multiplier=1, min=4, max=60),
+        wait=wait_exponential(multiplier=1, min=2, max=20),
         stop=stop_after_attempt(5),
         retry=retry_if_exception_type(requests.exceptions.HTTPError),
     )
@@ -27,7 +27,7 @@ class AsyncCamaraClient:
         url = f'{self.url}{endpoint}'
 
         async with self.semaphore:
-            async with session.get(url, params=params, timeout=60) as response:
+            async with session.get(url, params=params, timeout=20) as response:
                 try: 
                     response.raise_for_status()
                     if response.status == 429:
