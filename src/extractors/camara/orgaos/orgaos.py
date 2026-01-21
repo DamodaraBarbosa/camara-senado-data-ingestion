@@ -15,11 +15,7 @@ class AsyncOrgaosExtractor(CamaraBaseExtractor):
             id_legislatura,
             current_start_date,
             request_tries,
-            id_orgao,
-            sigla,
-            itens
         ):
-
         extracted_data = []
         page = 1
         empty_count = 0
@@ -44,8 +40,6 @@ class AsyncOrgaosExtractor(CamaraBaseExtractor):
 
                 for orgao in data:
                     orgao['idLegislatura'] = id_legislatura
-
-                print(f'[OK] Fetched {len(data)} orgaos for legislatura {id_legislatura} | Date {current_start_date.isoformat()} | Page: {page}')
 
                 extracted_data.extend(data)
                 empty_count = 0
@@ -109,4 +103,3 @@ class AsyncOrgaosExtractor(CamaraBaseExtractor):
             all_orgaos = [item for sublist in results if sublist for item in sublist]
 
             return all_orgaos
-
