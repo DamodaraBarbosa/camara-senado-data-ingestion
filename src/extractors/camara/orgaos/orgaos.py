@@ -15,6 +15,9 @@ class AsyncOrgaosExtractor(CamaraBaseExtractor):
             id_legislatura,
             current_start_date,
             request_tries,
+            id_orgao,
+            sigla,
+            itens
         ):
         extracted_data = []
         page = 1
