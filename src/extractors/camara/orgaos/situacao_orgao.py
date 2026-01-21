@@ -2,11 +2,11 @@ from extractors.camara.base import CamaraBaseExtractor
 import asyncio
 import aiohttp
 
-class CodigoSituacaoOrgaoExtractor(CamaraBaseExtractor):
-    ENDPOINT = 'referencias/orgaos/codSituacao'
+class SituacoesOrgaoExtractor(CamaraBaseExtractor):
+    ENDPOINT = 'referencias/orgaos/situacoesOrgao'
 
     async def extract(self):
-        all_codigos = []
+        all_situacoes = []
 
         async with aiohttp.ClientSession() as session:
             tasks = []
@@ -18,6 +18,6 @@ class CodigoSituacaoOrgaoExtractor(CamaraBaseExtractor):
 
             for result in results:
                 codigo = result.get('dados', [])
-                all_codigos.append(codigo)
+                all_situacoes.append(codigo)
 
-            return all_codigos
+            return all_situacoes
