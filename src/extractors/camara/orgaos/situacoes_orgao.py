@@ -3,7 +3,7 @@ import asyncio
 import aiohttp
 
 class SituacoesOrgaoExtractor(CamaraBaseExtractor):
-    ENDPOINT = 'referencias/orgaos/situacoesOrgao'
+    ENDPOINT = 'referencias/situacoesOrgao'
 
     async def extract(self):
         all_situacoes = []
