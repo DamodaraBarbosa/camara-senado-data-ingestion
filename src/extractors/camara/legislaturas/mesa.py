@@ -15,7 +15,7 @@ class AsyncMesaExtractor(CamaraBaseExtractor):
         ):
         legislaturas_id = list(legislatura.get('id') for legislatura in legislaturas if legislatura.get('id'))
         all_mesas = []
-        
+
         async with aiohttp.ClientSession() as session:
             legislatura_data = await self.client.get(session, self.LEGISLATURA, params={'id': legislaturas_id[0]})
             start_legislatura_date = legislatura_data['dados'][0].get('dataInicio', None)
@@ -40,7 +40,6 @@ class AsyncMesaExtractor(CamaraBaseExtractor):
 
                     temp_date = current_start_date
                     while temp_date.year == ano: 
-                        print(f'Legislatura: {legislatura} | Year: {ano} | Start Date: {temp_date}')  
                         task = self.client.get(session, self.ENDPOINT.format(id=legislatura))
                         tasks.append(task)
 
