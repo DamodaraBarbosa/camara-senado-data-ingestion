@@ -1,6 +1,6 @@
 from clients.camara_client import AsyncCamaraClient
 from extractors.camara.legislaturas.legislaturas import AsyncLegislaturaExtractor
-from extractors.camara.legislaturas.ids import AsyncLegislaturaIdsExtractor
+from extractors.camara.legislaturas.lideres import AsyncLegislaturaLideresExtractor
 import asyncio
 from datetime import datetime
 
@@ -15,9 +15,9 @@ async def main():
     # print(legislaturas_data)
     print(f'Time elapsed: {end - start}')
 
-    ids = AsyncLegislaturaIdsExtractor(client)
-    ids_data = await ids.extract(legislaturas=legislaturas_data)
-    print(ids_data)
+    lideres = AsyncLegislaturaLideresExtractor(client)
+    lideres_data = await lideres.extract(legislaturas=legislaturas_data)
+    print(f'Total lideres: {len(lideres_data)}')
 
 if __name__ == '__main__':
     asyncio.run(main())
