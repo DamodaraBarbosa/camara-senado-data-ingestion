@@ -9,6 +9,8 @@ class AsyncLegislaturaExtractor(CamaraBaseExtractor):
             self, 
             init_legislatura: int = None 
         ):
+        all_legislaturas = []
+
         async with aiohttp.ClientSession() as session:
             legislaturas = await self.client.get(session, self.ENDPOINT)
             legislaturas = legislaturas.get('dados', [])
@@ -23,6 +25,10 @@ class AsyncLegislaturaExtractor(CamaraBaseExtractor):
                 tasks.append(task)
 
             results = await asyncio.gather(*tasks)
+        
+            for result in results:
+                data = result.get('dados', [])
+                all_legislaturas.extend(data)
 
-            return results
+            return all_legislaturas
 
