@@ -42,8 +42,6 @@ class AsyncPartidosMembrosExtractor(CamaraBaseExtractor):
                     membro['idLegislatura'] = id_legislatura
                     membro['idPartido'] = id_partido
 
-                print(f'[OK] Fetched {len(data)} membros from API with params {current_params} for legislatura {id_legislatura}')
-
                 extracted_data.extend(data)
                 empty_count = 0
                 page += 1
