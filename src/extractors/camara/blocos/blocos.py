@@ -38,7 +38,6 @@ class BlocosExtractor(CamaraBaseExtractor):
                     bloco['idLegislatura'] = id_legislatura
                     extracted_data.append(bloco)
 
-                print(f'Fetched page {page} for legislatura {id_legislatura}. Total items: {extracted_data}')
                 page += 1
                 empty_count = 0
 
@@ -65,7 +64,6 @@ class BlocosExtractor(CamaraBaseExtractor):
             start = init_legislatura if init_legislatura is not None else current_legislatura   
 
             for id_legislatura in range(start, current_legislatura + 1):
-                print(f'Fetching data for legislatura {id_legislatura}')
                 blocos_data = await self._fetch_pages(session, id_legislatura, request_tries, itens)
                 all_blocos.extend(blocos_data)
         
