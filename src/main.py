@@ -1,24 +1,27 @@
 from clients.camara_client import AsyncCamaraClient
-from extractors.camara.legislaturas.legislaturas import AsyncLegislaturaExtractor
-from extractors.camara.legislaturas.mesa import AsyncMesaExtractor
+from extractors.camara.blocos.blocos import BlocosExtractor
+from extractors.camara.blocos.ids import AsyncBlocosIdsExtractor
+from extractors.camara.blocos.partidos import AsyncBlocosPartidosExtractor
 import asyncio
 from datetime import datetime
 
 async def main():
     client = AsyncCamaraClient()
-    legislaturas = AsyncLegislaturaExtractor(client)
+    blocos = BlocosExtractor(client)
     start = datetime.now()
 
-    legislaturas_data = await legislaturas.extract(init_legislatura=56)
+    blocos_data = await blocos.extract(init_legislatura=56)
+    blocos_ids_extractor = AsyncBlocosIdsExtractor(client)
+    blocos_ids_data = await blocos_ids_extractor.extract(blocos_data)
+
+    blocos_partidos_extractor = AsyncBlocosPartidosExtractor(client)
+    blocos_partidos_data = await blocos_partidos_extractor.extract(blocos_ids_data)
 
     end = datetime.now()
-    # print(legislaturas_data)
-    print(f'Time elapsed: {end - start}')
 
-    mesa = AsyncMesaExtractor(client)
-    mesa_data = await mesa.extract(legislaturas=legislaturas_data)
-    print(f'Total mesas: {len(mesa_data)}')
-    # print(f'Dados mesa: {mesa_data}')
+    print(f'Tempo gasto: {end - start}')
+    print(f'Len ids: {len(blocos_ids_data)}')
+    print(f'Partidos: {blocos_partidos_data}')
 
 if __name__ == '__main__':
     asyncio.run(main())
