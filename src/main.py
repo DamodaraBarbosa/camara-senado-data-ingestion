@@ -1,6 +1,6 @@
 from clients.camara_client import AsyncCamaraClient
 from extractors.camara.frentes.frentes import AsyncFrentesExtractor
-from extractors.camara.frentes.ids import AsyncFrentesIdsExtractor
+from extractors.camara.frentes.membros import AsyncFrentesMembrosExtractor
 import asyncio
 from datetime import datetime
 
@@ -9,15 +9,15 @@ async def main():
     frentes = AsyncFrentesExtractor(client)
 
     start = datetime.now()
-    frentes_data = await frentes.extract()
-    frentes_ids_extractor = AsyncFrentesIdsExtractor(client)
-    frentes_ids_data = await frentes_ids_extractor.extract(frentes_data)
+    frentes_data = await frentes.extract(init_legislatura=56)
+    frentes_membros = AsyncFrentesMembrosExtractor(client)
+    frentes_membros_data = await frentes_membros.extract(frentes_data)
 
     end = datetime.now()
 
     print(f'Tempo gasto: {end - start}')
-    print(f'Len frentes: {len(frentes_ids_data)}')
-    print(f'Frentes: {frentes_ids_data}')
+    print(f'Len frentes: {len(frentes_membros_data)}')
+    print(f'Frentes: {frentes_membros_data}')
 
 if __name__ == '__main__':
     asyncio.run(main())

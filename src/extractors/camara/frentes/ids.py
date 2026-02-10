@@ -7,9 +7,9 @@ class AsyncFrentesIdsExtractor(CamaraBaseExtractor):
 
     async def extract(
             self, 
-            frentes_data
+            frentes
         ):
-        frentes_ids = list(frente.get('id') for frente in frentes_data if frente.get('id'))
+        frentes_ids = list(frente.get('id') for frente in frentes if frente.get('id'))
         all_ids = []
 
         async with aiohttp.ClientSession() as session:
