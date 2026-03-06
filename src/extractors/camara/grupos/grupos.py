@@ -1,18 +1,18 @@
 from extractors.camara.base import CamaraBaseExtractor
-import asyncio
 import aiohttp
+import asyncio
 
-class AsyncFrentesExtractor(CamaraBaseExtractor):
-    ENDPOINT = 'frentes'
+class AsyncGruposExtractor(CamaraBaseExtractor):
+    ENDPOINT = 'grupos'
     LEGISLATURAS = 'legislaturas'
 
     async def _fetch_pages(
-            self,
-            session,
-            id_legislatura,
-            request_tries,
-            itens  
-        ):
+        self,
+        session,
+        id_legislatura,
+        request_tries,
+        itens  
+    ):
         extracted_data = []
         page = 1
         empty_count = 0
@@ -34,9 +34,9 @@ class AsyncFrentesExtractor(CamaraBaseExtractor):
                     page += 1
                     continue
 
-                for frente in data:
-                    frente['idLegislatura'] = id_legislatura
-                    extracted_data.append(frente)
+                for grupo in data:
+                    grupo['idLegislatura'] = id_legislatura
+                    extracted_data.append(grupo)
 
                 page += 1
                 empty_count = 0
@@ -46,24 +46,24 @@ class AsyncFrentesExtractor(CamaraBaseExtractor):
                 empty_count += 1
         
         return extracted_data
-    
+
     async def extract(
             self,
             init_legislatura: int = None,
             itens: int = 100,
             request_tries: int = 4
         ):
-        all_frentes = []
+        all_grupos = []
 
         async with aiohttp.ClientSession() as session:
             legislaturas = await self.client.get(session, self.LEGISLATURAS)
             legislaturas_data = legislaturas.get('dados', [])
             current_legislatura = max([l['id'] for l in legislaturas_data]) if legislaturas_data else 0
-            
+
             start = init_legislatura if init_legislatura is not None else current_legislatura   
 
             for id_legislatura in range(start, current_legislatura + 1):
                 frentes_data = await self._fetch_pages(session, id_legislatura, request_tries, itens)
-                all_frentes.extend(frentes_data)
+                all_grupos.extend(frentes_data)
         
-        return all_frentes
+        return all_grupos     
