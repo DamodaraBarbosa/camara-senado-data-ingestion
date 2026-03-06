@@ -17,6 +17,7 @@ async def main():
     end = datetime.now()
 
     print(f'Grupos IDs: {grupos_ids_data}')
+    print(f'Número de IDs de grupos: {len(grupos_ids_data)}')
     print(f'Tempo gasto: {end - start}')
 
 if __name__ == '__main__':
