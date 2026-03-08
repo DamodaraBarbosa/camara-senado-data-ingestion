@@ -38,8 +38,6 @@ class AsyncEventosExtractor(CamaraBaseExtractor):
                     evento['idLegislatura'] = id_legislatura
                     extracted_data.append(evento)
                 
-                print(f'Extracted {len(data)} eventos for legislatura {id_legislatura}, page {page}')
-
                 page += 1
                 empty_count = 0
 
