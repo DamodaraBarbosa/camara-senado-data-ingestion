@@ -2,7 +2,7 @@ from extractors.camara.base import CamaraBaseExtractor
 import asyncio
 import aiohttp
 
-class BlocosExtractor(CamaraBaseExtractor):
+class AsyncBlocosExtractor(CamaraBaseExtractor):
     ENDPOINT = 'blocos'
     LEGISLATURAS = 'legislaturas'
 

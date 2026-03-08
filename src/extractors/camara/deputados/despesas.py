@@ -1,11 +1,12 @@
 from extractors.camara.base import CamaraBaseExtractor
 from datetime import datetime
 import json
+import aiohttp
 
-class DespesasExtractor(CamaraBaseExtractor):
+class AsyncDespesasExtractor(CamaraBaseExtractor):
     ENDPOINT = 'deputados/{id}/despesas'
 
-    def extract(
+    async def extract(
             self, 
             deputados: json, 
             init_legislatura: int = None, 
@@ -13,7 +14,8 @@ class DespesasExtractor(CamaraBaseExtractor):
             items: int = 1000,
             request_tries: int = 4
         ):
-        legislatura = self.client.get('legislaturas', params={'id': init_legislatura})
+        session = aiohttp.ClientSession()
+        legislatura = await self.client.get(session, 'legislaturas', params={'id': init_legislatura})
         start_legislatura_date = legislatura['dados'][0].get('dataInicio', None)
         start_legislatura_year = int(start_legislatura_date.split('-')[0]) if start_legislatura_date else None
 
@@ -40,7 +42,7 @@ class DespesasExtractor(CamaraBaseExtractor):
 
                     params = {k: v for k, v in params.items() if v is not None}
 
-                    response = self.client.get(self.ENDPOINT.format(id=deputado_id), params=params)
+                    response = await self.client.get(session, self.ENDPOINT.format(id=deputado_id), params=params)
                     data = response.get('dados', [])
 
                     if not data:
@@ -59,4 +61,5 @@ class DespesasExtractor(CamaraBaseExtractor):
                 except Exception as e:
                     print(f'Error while extracting despesas for deputado {deputado_id}: {e}')
 
+        await session.close()
         return all_expenses
