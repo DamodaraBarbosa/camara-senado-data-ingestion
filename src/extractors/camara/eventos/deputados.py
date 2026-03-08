@@ -21,8 +21,10 @@ class AsyncEventosDeputadosExtractor(CamaraBaseExtractor):
 
             results = await asyncio.gather(*tasks)
 
-            for result in results:
+            for evento_id, result in zip(eventos_ids, results):
                 deputados_data = result.get('dados', [])
+                for deputado in deputados_data:
+                    deputado['idEvento'] = evento_id
                 all_deputados.extend(deputados_data)
 
         return all_deputados
