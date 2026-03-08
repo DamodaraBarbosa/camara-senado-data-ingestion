@@ -1,19 +1,21 @@
 from extractors.camara.base import CamaraBaseExtractor
 from datetime import datetime
 import json
+import aiohttp
 
-class DiscursosExtractor(CamaraBaseExtractor):
+class AsyncDiscursosExtractor(CamaraBaseExtractor):
     ENDPOINT = 'deputados/{id}/discursos'
     LEGISLATURAS = 'legislaturas'
 
-    def extract(
+    async def extract(
             self, 
             deputados: json, 
             init_legislatura: int = None, 
             items: int = 50,
             request_tries: int = 4
         ):
-        legislatura = self.client.get(self.LEGISLATURAS)['dados']
+        session = aiohttp.ClientSession()
+        legislatura = (await self.client.get(session, self.LEGISLATURAS))['dados']
         current_legislatura = max(legislatura['id'] for legislatura in legislatura)
         start_legislatura = init_legislatura if init_legislatura is not None else current_legislatura
 
@@ -36,7 +38,7 @@ class DiscursosExtractor(CamaraBaseExtractor):
 
                         params = {k: v for k, v in params.items() if v is not None}
 
-                        response = self.client.get(self.ENDPOINT.format(id=deputado_id), params=params)
+                        response = await self.client.get(session, self.ENDPOINT.format(id=deputado_id), params=params)
                         data = response.get('dados', [])
 
                         if not data:
@@ -55,4 +57,5 @@ class DiscursosExtractor(CamaraBaseExtractor):
                     except Exception as e:
                         print(f'Error while extracting discursos for deputado {deputado_id}: {e}')
 
+        await session.close()
         return all_discursos

@@ -1,10 +1,12 @@
 from extractors.camara.base import CamaraBaseExtractor
 import json
+import aiohttp
 
-class IdsExtractor(CamaraBaseExtractor):
+class AsyncIdsExtractor(CamaraBaseExtractor):
     ENDPOINT = 'deputados/'
 
-    def extract(self, deputados: json):
+    async def extract(self, deputados: json):
+        session = aiohttp.ClientSession()
         deputados_ids = []
         all_ids = []
 
@@ -14,10 +16,11 @@ class IdsExtractor(CamaraBaseExtractor):
                 deputados_ids.append(deputado_id)
 
         for id in deputados_ids:
-            response = self.client.get(f'{self.ENDPOINT}{id}')
+            response = await self.client.get(session, f'{self.ENDPOINT}{id}')
             data = response.get('dados', {})
             all_ids.append(data)
 
+        await session.close()
         return all_ids
 
         # response = self.client.get(self.ENDPOINT)

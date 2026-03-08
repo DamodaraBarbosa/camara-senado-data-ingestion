@@ -5,5 +5,5 @@ class CamaraBaseExtractor:
         self.client = client
         self.params = params or {}
 
-    def extract(self):
+    async def extract(self):
         raise NotImplementedError('The extract method must be implemented by subclasses.')

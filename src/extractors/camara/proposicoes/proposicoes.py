@@ -1,11 +1,12 @@
 from extractors.camara.base import CamaraBaseExtractor
 from datetime import datetime
+import aiohttp
 
-class ProposicoesExtractor(CamaraBaseExtractor):
+class AsyncProposicoesExtractor(CamaraBaseExtractor):
     ENDPOINT = 'proposicoes'
     LEGISLATURA = 'legislaturas'
 
-    def extract(
+    async def extract(
             self, 
             autor: str = None, 
             init_legislatura: int = None, 
@@ -15,7 +16,8 @@ class ProposicoesExtractor(CamaraBaseExtractor):
             itens: int = 100,
             request_tries: int = 4
         ):
-        legislatura = self.client.get(self.LEGISLATURA, params={'id': init_legislatura})
+        session = aiohttp.ClientSession()
+        legislatura = await self.client.get(session, self.LEGISLATURA, params={'id': init_legislatura})
         start_legislatura_date = legislatura['dados'][0].get('dataInicio', None)
         start_legislatura_year = int(start_legislatura_date.split('-')[0]) if start_legislatura_date else None
 
@@ -43,7 +45,7 @@ class ProposicoesExtractor(CamaraBaseExtractor):
 
                     params = {k: v for k, v in params.items() if v is not None}
 
-                    response = self.client.get(self.ENDPOINT, params=params)
+                    response = await self.client.get(session, self.ENDPOINT, params=params)
                     data = response.get('dados', [])
 
                     if not data:
@@ -58,4 +60,5 @@ class ProposicoesExtractor(CamaraBaseExtractor):
                 except Exception as e:
                     print(f'Error while extracting proposicoes: {e}')
 
+        await session.close()
         return all_proposicoes

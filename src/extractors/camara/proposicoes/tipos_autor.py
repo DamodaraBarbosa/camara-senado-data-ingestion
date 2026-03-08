@@ -1,14 +1,18 @@
 from extractors.camara.base import CamaraBaseExtractor
+import aiohttp
 
-class TiposAutorExtractor(CamaraBaseExtractor):
+class AsyncTiposAutorExtractor(CamaraBaseExtractor):
     ENDPOINT = 'referencias/tiposAutor'
 
-    def extract(self):
+    async def extract(self):
+        session = aiohttp.ClientSession()
         try:
-            response = self.client.get(self.ENDPOINT)
+            response = await self.client.get(session, self.ENDPOINT)
             data = response.get('dados', [])
+            await session.close()
             return data
         
         except Exception as e:
             print(f'Error while extracting tipos autor: {e}')
+            await session.close()
             return []

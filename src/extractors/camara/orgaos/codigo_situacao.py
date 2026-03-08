@@ -2,7 +2,7 @@ from extractors.camara.base import CamaraBaseExtractor
 import asyncio
 import aiohttp
 
-class CodigoSituacaoOrgaoExtractor(CamaraBaseExtractor):
+class AsyncCodigoSituacaoOrgaoExtractor(CamaraBaseExtractor):
     ENDPOINT = 'referencias/orgaos/codSituacao'
 
     async def extract(self):
