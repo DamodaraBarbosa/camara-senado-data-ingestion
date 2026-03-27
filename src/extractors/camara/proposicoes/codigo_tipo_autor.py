@@ -1,6 +1,7 @@
 from extractors.camara.base import CamaraBaseExtractor
 import aiohttp
 
+
 class AsyncCodigoTipoAutorExtractor(CamaraBaseExtractor):
     ENDPOINT = 'referencias/proposicoes/codTipoAutor'
 
@@ -11,7 +12,7 @@ class AsyncCodigoTipoAutorExtractor(CamaraBaseExtractor):
             data = response.get('dados', [])
             await session.close()
             return data
-        
+
         except Exception as e:
             print(f'Error while extracting codigo tipo autor: {e}')
             await session.close()

@@ -1,6 +1,7 @@
 from extractors.camara.base import CamaraBaseExtractor
 import aiohttp
 
+
 class AsyncCodigoSituacaoExtractor(CamaraBaseExtractor):
     ENDPOINT = 'referencias/deputados/codSituacao'
 

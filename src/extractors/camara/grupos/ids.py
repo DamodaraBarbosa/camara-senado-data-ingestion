@@ -2,13 +2,14 @@ from extractors.camara.base import CamaraBaseExtractor
 import aiohttp
 import asyncio
 
+
 class AsyncGruposIdsExtractor(CamaraBaseExtractor):
     ENDPOINT = 'grupos/{id}'
 
     async def extract(
-            self, 
-            grupos
-        ):
+        self,
+        grupos
+    ):
         grupos_ids = list(grupo.get('id') for grupo in grupos if grupo.get('id'))
         all_ids = []
 

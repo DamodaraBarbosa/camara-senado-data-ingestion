@@ -2,6 +2,7 @@ from extractors.camara.base import CamaraBaseExtractor
 import json
 import aiohttp
 
+
 class AsyncOcupacoesExtractor(CamaraBaseExtractor):
     ENDPOINT = 'deputados/{id}/ocupacoes'
 
@@ -14,10 +15,10 @@ class AsyncOcupacoesExtractor(CamaraBaseExtractor):
             for deputado_id in deputados_ids:
                 response = await self.client.get(session, self.ENDPOINT.format(id=deputado_id))
                 data = response.get('dados', [])
-                
+
                 for ocupacao in data:
                     ocupacao['deputado_id'] = deputado_id
-                
+
                 all_ocupacoes.extend(data)
 
         except Exception as e:

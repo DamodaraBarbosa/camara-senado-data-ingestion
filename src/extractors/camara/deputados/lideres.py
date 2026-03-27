@@ -1,15 +1,16 @@
 from extractors.camara.base import CamaraBaseExtractor
 import aiohttp
 
+
 class AsyncLideresExtractor(CamaraBaseExtractor):
     ENDPOINT = 'legislaturas/{id}/lideres'
     LEGISLATURAS = 'legislaturas'
 
     async def extract(
-            self, init_legislatura: int = None,
-            items: int = 50,
-            request_tries: int = 4
-        ):
+        self, init_legislatura: int = None,
+        items: int = 50,
+        request_tries: int = 4
+    ):
         session = aiohttp.ClientSession()
         legislaturas = (await self.client.get(session, self.LEGISLATURAS))['dados']
         current_legislatura = max(legislatura['id'] for legislatura in legislaturas)
@@ -18,7 +19,7 @@ class AsyncLideresExtractor(CamaraBaseExtractor):
         all_lideres = []
 
         for legislatura in range(start_legislatura_date, current_legislatura + 1):
-            page = 1 
+            page = 1
             empty_count = 0
 
             while empty_count < request_tries:

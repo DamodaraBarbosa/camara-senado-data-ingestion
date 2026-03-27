@@ -5,19 +5,20 @@ import aiohttp
 from datetime import datetime, date
 from utils.utils import add_months
 
+
 class AsyncOrgaosVotacoesExtractor(CamaraBaseExtractor):
     ENDPOINT = 'orgaos/{id}/votacoes'
     LEGISLATURA_ENDPOINT = 'legislaturas'
 
     async def _fetch_period_pages(
-            self,
-            session,
-            legilslatura,
-            current_start_date,
-            request_tries,
-            id_orgao,
-            itens
-        ):
+        self,
+        session,
+        legilslatura,
+        current_start_date,
+        request_tries,
+        id_orgao,
+        itens
+    ):
         base_params = {
             'itens': itens
         }
@@ -48,27 +49,28 @@ class AsyncOrgaosVotacoesExtractor(CamaraBaseExtractor):
                 for votacao in data:
                     votacao['idLegislatura'] = legilslatura
                     votacao['idOrgao'] = id_orgao
-                
+
                 extracted_date.append(data)
                 empty_count = 0
                 page += 1
 
             except Exception as e:
-                print(f'Error fetching votacoes from API with params {current_params}. Error: {e.__class__.__name__}: {e}. Response: {response.status if "response" in locals() and hasattr(response, "status") else "N/A"}')
+                print(
+                    f'Error fetching votacoes from API with params {current_params}. Error: {e.__class__.__name__}: {e}. Response: {response.status if "response" in locals() and hasattr(response, "status") else "N/A"}')
                 break
 
         return extracted_date
-    
+
     async def extract(
-          self,
-          init_legislatura: int = None,
-          orgaos: json = None,
-          itens: int = 100,
-          request_tries: int = 4     
-        ):
+        self,
+        init_legislatura: int = None,
+        orgaos: json = None,
+        itens: int = 100,
+        request_tries: int = 4
+    ):
         async with aiohttp.ClientSession() as session:
             orgaos_id = list(dict.fromkeys(orgao.get('id') for orgao in orgaos if orgao.get('id')))
-            start_legislatura = await self.client.get(session,self.LEGISLATURA_ENDPOINT, params={'id': init_legislatura})
+            start_legislatura = await self.client.get(session, self.LEGISLATURA_ENDPOINT, params={'id': init_legislatura})
             start_legislatura_date = start_legislatura['dados'][0].get('dataInicio', None)
             start_legislatura_year = int(start_legislatura_date.split('-')[0]) if start_legislatura_date else None
 
@@ -85,8 +87,8 @@ class AsyncOrgaosVotacoesExtractor(CamaraBaseExtractor):
                     if index % 4 == 0 and id_legislatura == init_legislatura:
                         current_start_date = date(ano, 2, 1)
                     else:
-                        current_start_date = date(ano, 1, 1)    
-                    
+                        current_start_date = date(ano, 1, 1)
+
                     if current_start_date > date.today():
                         break
 

@@ -3,16 +3,17 @@ import json
 import asyncio
 import aiohttp
 from datetime import datetime, date
-from utils.utils import add_months 
+from utils.utils import add_months
+
 
 class AsyncMesaExtractor(CamaraBaseExtractor):
     ENDPOINT = 'legislaturas/{id}/mesa'
     LEGISLATURA = 'legislaturas'
 
     async def extract(
-            self,
-            legislaturas: json  
-        ):
+        self,
+        legislaturas: json
+    ):
         legislaturas_id = list(legislatura.get('id') for legislatura in legislaturas if legislatura.get('id'))
         all_mesas = []
 
@@ -39,7 +40,7 @@ class AsyncMesaExtractor(CamaraBaseExtractor):
                         break
 
                     temp_date = current_start_date
-                    while temp_date.year == ano: 
+                    while temp_date.year == ano:
                         task = self.client.get(session, self.ENDPOINT.format(id=legislatura))
                         tasks.append(task)
 

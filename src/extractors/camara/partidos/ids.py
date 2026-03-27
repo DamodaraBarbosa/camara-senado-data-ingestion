@@ -3,13 +3,14 @@ import json
 import asyncio
 import aiohttp
 
+
 class AsyncPartidosIdsExtractor(CamaraBaseExtractor):
     ENDPOINT = 'partidos/{id}'
 
     async def extract(
-            self,
-            partidos: json    
-        ):
+        self,
+        partidos: json
+    ):
         partidos_ids = list(dict.fromkeys(partido.get('id') for partido in partidos if partido.get('id')))
         all_ids = []
 

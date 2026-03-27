@@ -1,6 +1,7 @@
 from extractors.camara.base import CamaraBaseExtractor
 import aiohttp
 
+
 class AsyncCodigoTemaExtractor(CamaraBaseExtractor):
     ENDPOINT = 'referencias/proposicoes/codTema'
 
@@ -11,7 +12,7 @@ class AsyncCodigoTemaExtractor(CamaraBaseExtractor):
             data = response.get('dados', [])
             await session.close()
             return data
-        
+
         except Exception as e:
             print(f'Error while extracting codigo tema: {e}')
             await session.close()

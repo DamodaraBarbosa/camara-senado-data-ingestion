@@ -3,17 +3,18 @@ from datetime import datetime
 import json
 import aiohttp
 
+
 class AsyncDespesasExtractor(CamaraBaseExtractor):
     ENDPOINT = 'deputados/{id}/despesas'
 
     async def extract(
-            self, 
-            deputados: json, 
-            init_legislatura: int = None, 
-            month: int = None, 
-            items: int = 1000,
-            request_tries: int = 4
-        ):
+        self,
+        deputados: json,
+        init_legislatura: int = None,
+        month: int = None,
+        items: int = 1000,
+        request_tries: int = 4
+    ):
         session = aiohttp.ClientSession()
         legislatura = await self.client.get(session, 'legislaturas', params={'id': init_legislatura})
         start_legislatura_date = legislatura['dados'][0].get('dataInicio', None)
@@ -26,8 +27,8 @@ class AsyncDespesasExtractor(CamaraBaseExtractor):
         deputados_ids = list(dict.fromkeys(deputado.get('id') for deputado in deputados if deputado.get('id')))
 
         all_expenses = []
- 
-        for  deputado_id in deputados_ids:
+
+        for deputado_id in deputados_ids:
             page = 1
             empty_count = 0
 

@@ -10,15 +10,15 @@ class AsyncOrgaosExtractor(CamaraBaseExtractor):
     LEGISLATURA = 'legislaturas'
 
     async def _fetch_period_pages(
-            self,
-            session,
-            id_legislatura,
-            current_start_date,
-            request_tries,
-            id_orgao,
-            sigla,
-            itens
-        ):
+        self,
+        session,
+        id_legislatura,
+        current_start_date,
+        request_tries,
+        id_orgao,
+        sigla,
+        itens
+    ):
         extracted_data = []
         page = 1
         empty_count = 0
@@ -55,13 +55,13 @@ class AsyncOrgaosExtractor(CamaraBaseExtractor):
         return extracted_data
 
     async def extract(
-            self,
-            init_legislatura: int = None,
-            id_orgao: list = None,
-            sigla: list = None,
-            itens: int = 100,
-            request_tries: int = 4
-        ):
+        self,
+        init_legislatura: int = None,
+        id_orgao: list = None,
+        sigla: list = None,
+        itens: int = 100,
+        request_tries: int = 4
+    ):
         async with aiohttp.ClientSession() as session:
             legislatura = await self.client.get(session, self.LEGISLATURA, params={'id': init_legislatura})
             start_legislatura_date = legislatura['dados'][0].get('dataInicio', None)

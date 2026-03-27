@@ -1,6 +1,7 @@
 from extractors.camara.base import CamaraBaseExtractor
 import aiohttp
 
+
 class AsyncCodigoSituacaoExtractor(CamaraBaseExtractor):
     ENDPOINT = 'referencias/proposicoes/codSituacao'
 
@@ -11,7 +12,7 @@ class AsyncCodigoSituacaoExtractor(CamaraBaseExtractor):
             data = response.get('dados', [])
             await session.close()
             return data
-        
+
         except Exception as e:
             print(f'Error while extracting codigo situacao: {e}')
             await session.close()

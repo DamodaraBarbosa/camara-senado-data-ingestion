@@ -2,13 +2,14 @@ from extractors.camara.base import CamaraBaseExtractor
 import aiohttp
 import asyncio
 
+
 class AsyncGruposHistoricoExtractor(CamaraBaseExtractor):
     ENDPOINT = 'grupos/{id}/historico'
 
     async def extract(
-            self, 
-            grupos
-        ):
+        self,
+        grupos
+    ):
         grupos_ids = list(grupo.get('id') for grupo in grupos if grupo.get('id'))
         all_historico = []
 
@@ -27,5 +28,5 @@ class AsyncGruposHistoricoExtractor(CamaraBaseExtractor):
                 for historico in historico_data:
                     historico['idGrupo'] = grupo_id
                 all_historico.extend(historico_data)
-        
+
         return all_historico
