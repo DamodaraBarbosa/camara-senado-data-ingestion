@@ -27,7 +27,11 @@ class AsyncLegislaturaLideresExtractor(CamaraBaseExtractor):
 
                 current_params = {k: v for k, v in current_params.items() if v is not None}
 
-                response = await self.client.get(session, self.ENDPOINT.format(id=id_legislatura), params=current_params)
+                response = await self.client.get(
+                    session,
+                    self.ENDPOINT.format(id=id_legislatura),
+                    params=current_params,
+                )
                 data = response.get('dados', [])
 
                 if not data:
