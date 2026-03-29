@@ -96,7 +96,7 @@ class AsyncOrgaosVotacoesExtractor(CamaraBaseExtractor):
                     while temp_date.year == ano:
                         task = self._fetch_period_pages(
                             session=session,
-                            legilslatura=id_legislatura,
+                            legislatura=id_legislatura,
                             current_start_date=temp_date,
                             request_tries=request_tries,
                             id_orgao=orgao_id,
