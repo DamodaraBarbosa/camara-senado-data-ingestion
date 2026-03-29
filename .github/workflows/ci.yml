@@ -55,5 +55,7 @@ jobs:
         run: pip install -r requirements.txt pytest pytest-asyncio
 
       - name: Run tests
+        env:
+          PYTHONPATH: src
         run: pytest tests/ -v
-        continue-on-error: true  # Remove when tests are added
+        continue-on-error: false
