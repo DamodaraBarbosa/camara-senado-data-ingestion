@@ -1,10 +1,12 @@
 from extractors.camara.base import AsyncBaseExtractor
 
+
 class CamaraBaseExtractor(AsyncBaseExtractor):
     def __init__(self, client):
         self.client = client
         self.ENDPOINT = None
-        self.LEGISLATURAS = None 
+        self.LEGISLATURAS = None
+
 
         async def extract(self, **kwargs):
             if self.ENDPOINT is None:
@@ -14,10 +16,10 @@ class CamaraBaseExtractor(AsyncBaseExtractor):
 
             data = []
             for legislatura in self.LEGISLATURAS:
-                params = {'legislatura': legislatura}
+                params = {"legislatura": legislatura}
                 params.update(kwargs)
                 response = await self.client.get(self.ENDPOINT, params=params)
-                data.extend(response['dados'])
+                data.extend(response["dados"])
             return data
-        
+
         return extract
