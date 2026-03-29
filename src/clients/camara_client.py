@@ -29,10 +29,11 @@ class AsyncCamaraClient:
         async with self.semaphore:
             async with session.get(url, params=params, timeout=20) as response:
                 try:
-                    response.raise_for_status()
                     if response.status == 429:
                         wait_time = response.headers.get('Retry-After', '30')
                         await asyncio.sleep(int(wait_time))
+
+                        response.raise_for_status()
 
                     text = await response.text()
                     if not text:
@@ -42,4 +43,4 @@ class AsyncCamaraClient:
 
                 except Exception as e:
                     print(f'Error: {e}')
-                    return {}
+                    raise e
