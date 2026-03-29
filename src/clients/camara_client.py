@@ -18,7 +18,7 @@ class AsyncCamaraClient:
     @retry(
         wait=wait_exponential(multiplier=1, min=2, max=20),
         stop=stop_after_attempt(5),
-        retry=retry_if_exception_type(requests.exceptions.HTTPError),
+        retry=retry_if_exception_type(aiohttp.ClientError),
     )
     async def get(self, session: aiohttp.ClientSession, endpoint: str, params: dict = None):
         if not endpoint:
