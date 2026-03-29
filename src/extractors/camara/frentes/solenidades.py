@@ -7,7 +7,6 @@ class CamaraBaseExtractor(AsyncBaseExtractor):
         self.ENDPOINT = None
         self.LEGISLATURAS = None
 
-
         async def extract(self, **kwargs):
             if self.ENDPOINT is None:
                 raise NotImplementedError("ENDPOINT must be defined in the subclass.")
