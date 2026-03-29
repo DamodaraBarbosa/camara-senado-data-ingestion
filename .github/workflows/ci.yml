@@ -56,4 +56,4 @@ jobs:
 
       - name: Run tests
         run: pytest tests/ -v
-        continue-on-error: true  # Remove when tests are added
+        continue-on-error: false
