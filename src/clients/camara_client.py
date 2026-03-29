@@ -1,6 +1,5 @@
 import asyncio
 import aiohttp
-import requests
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 
 
@@ -43,4 +42,4 @@ class AsyncCamaraClient:
 
                 except Exception as e:
                     print(f'Error: {e}')
-                    raise e
+                    raise 
