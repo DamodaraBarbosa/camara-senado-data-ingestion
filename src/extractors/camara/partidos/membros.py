@@ -4,19 +4,20 @@ import aiohttp
 from datetime import datetime, date
 from utils.utils import add_months
 
+
 class AsyncPartidosMembrosExtractor(CamaraBaseExtractor):
     ENDPOINT = 'partidos/{id}/membros'
     LEGISLATURA = 'legislaturas'
 
     async def _fetch_period_pages(
-            self,
-            session,
-            id_legislatura,
-            id_partido,
-            current_start_date,
-            request_tries,
-            itens
-        ):
+        self,
+        session,
+        id_legislatura,
+        id_partido,
+        current_start_date,
+        request_tries,
+        itens
+    ):
         extracted_data = []
         page = 1
         empty_count = 0
@@ -53,12 +54,12 @@ class AsyncPartidosMembrosExtractor(CamaraBaseExtractor):
         return extracted_data
 
     async def extract(
-            self,
-            init_legislatura: int = None,
-            partidos: list = None,
-            itens: int = 100,
-            request_tries: int = 4    
-        ):
+        self,
+        init_legislatura: int = None,
+        partidos: list = None,
+        itens: int = 100,
+        request_tries: int = 4
+    ):
         partidos_id = list(dict.fromkeys(partido.get('id') for partido in partidos if partido.get('id')))
 
         async with aiohttp.ClientSession() as session:
@@ -78,7 +79,7 @@ class AsyncPartidosMembrosExtractor(CamaraBaseExtractor):
                     if index % 4 == 0 and id_legislatura == init_legislatura:
                         current_start_date = date(ano, 2, 1)
                     else:
-                        current_start_date = date(ano, 1, 1)    
+                        current_start_date = date(ano, 1, 1)
 
                     if current_start_date > date.today():
                         break

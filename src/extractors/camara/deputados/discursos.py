@@ -3,17 +3,18 @@ from datetime import datetime
 import json
 import aiohttp
 
+
 class AsyncDiscursosExtractor(CamaraBaseExtractor):
     ENDPOINT = 'deputados/{id}/discursos'
     LEGISLATURAS = 'legislaturas'
 
     async def extract(
-            self, 
-            deputados: json, 
-            init_legislatura: int = None, 
-            items: int = 50,
-            request_tries: int = 4
-        ):
+        self,
+        deputados: json,
+        init_legislatura: int = None,
+        items: int = 50,
+        request_tries: int = 4
+    ):
         session = aiohttp.ClientSession()
         legislatura = (await self.client.get(session, self.LEGISLATURAS))['dados']
         current_legislatura = max(legislatura['id'] for legislatura in legislatura)
@@ -24,7 +25,7 @@ class AsyncDiscursosExtractor(CamaraBaseExtractor):
 
         for legislatura in range(start_legislatura, current_legislatura + 1):
             print(f'Legislatura: {legislatura}')
-            for  deputado_id in deputados_ids:
+            for deputado_id in deputados_ids:
                 page = 1
                 empty_count = 0
 
@@ -50,7 +51,7 @@ class AsyncDiscursosExtractor(CamaraBaseExtractor):
 
                         for discurso in data:
                             discurso['deputado_id'] = deputado_id
-                        
+
                         all_discursos.extend(data)
                         page += 1
 

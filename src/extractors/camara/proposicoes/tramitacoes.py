@@ -2,16 +2,18 @@ from extractors.camara.base import CamaraBaseExtractor
 import json
 import aiohttp
 
+
 class AsyncTramitacoesExtractor(CamaraBaseExtractor):
     ENDPOINT = 'proposicoes/{id}/tramitacoes'
 
     async def extract(
-            self, 
-            proposicoes: json,
-            data_inicio: str = None,
-        ):
+        self,
+        proposicoes: json,
+        data_inicio: str = None,
+    ):
         session = aiohttp.ClientSession()
-        proposicoes_ids = list(dict.fromkeys(proposicao.get('id') for proposicao in proposicoes if proposicao.get('id')))
+        proposicoes_ids = list(dict.fromkeys(proposicao.get('id')
+                               for proposicao in proposicoes if proposicao.get('id')))
         print(proposicoes_ids)
         all_tramitacoes = []
 

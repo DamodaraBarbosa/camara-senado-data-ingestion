@@ -3,16 +3,17 @@ import json
 import asyncio
 import aiohttp
 
+
 class AsyncLideresExtractor(CamaraBaseExtractor):
     ENDPOINT = 'partidos/{id}/lideres'
 
     async def _fetch_pages(
-            self,
-            session,
-            id_partido,
-            request_tries,
-            itens
-        ):
+        self,
+        session,
+        id_partido,
+        request_tries,
+        itens
+    ):
         extracted_data = []
         page = 1
         empty_count = 0
@@ -49,13 +50,13 @@ class AsyncLideresExtractor(CamaraBaseExtractor):
         return extracted_data
 
     async def extract(
-            self,
-            partidos: json,
-            itens: int = 100,
-            request_tries: int = 4
-        ):
+        self,
+        partidos: json,
+        itens: int = 100,
+        request_tries: int = 4
+    ):
         partidos_ids = list(dict.fromkeys(partido.get('id') for partido in partidos if partido.get('id')))
-                            
+
         async with aiohttp.ClientSession() as session:
             tasks = []
 

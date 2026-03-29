@@ -2,13 +2,14 @@ from extractors.camara.base import CamaraBaseExtractor
 import asyncio
 import aiohttp
 
+
 class AsyncBlocosPartidosExtractor(CamaraBaseExtractor):
     ENDPOINT = 'blocos/{id}/partidos'
 
     async def extract(
-            self,
-            blocos: list
-        ):
+        self,
+        blocos: list
+    ):
         blocos_ids = list(bloco.get('id') for bloco in blocos if bloco.get('id'))
         all_partidos = []
 

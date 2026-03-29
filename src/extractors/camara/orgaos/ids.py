@@ -3,13 +3,14 @@ import json
 import asyncio
 import aiohttp
 
+
 class AsyncOrgaosIdsExtractor(CamaraBaseExtractor):
     ENDPOINT = 'orgaos/{id}'
 
     async def extract(
-            self,
-            orgaos: json
-        ):
+        self,
+        orgaos: json
+    ):
         orgaos_ids = list(dict.fromkeys(orgao.get('id') for orgao in orgaos if orgao.get('id')))
         all_ids = []
 

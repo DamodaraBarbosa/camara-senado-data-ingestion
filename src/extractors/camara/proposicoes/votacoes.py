@@ -2,15 +2,17 @@ from extractors.camara.base import CamaraBaseExtractor
 import json
 import aiohttp
 
+
 class AsyncVotacoesExtractor(CamaraBaseExtractor):
     ENDPOINT = 'proposicoes/{id}/votacoes'
 
     async def extract(
-            self, 
-            proposicoes: json,
-        ):
+        self,
+        proposicoes: json,
+    ):
         session = aiohttp.ClientSession()
-        proposicoes_ids = list(dict.fromkeys(proposicao.get('id') for proposicao in proposicoes if proposicao.get('id')))
+        proposicoes_ids = list(dict.fromkeys(proposicao.get('id')
+                               for proposicao in proposicoes if proposicao.get('id')))
         print(proposicoes_ids)
         all_votacoes = []
 

@@ -2,20 +2,21 @@ from extractors.camara.base import CamaraBaseExtractor
 from datetime import datetime
 import aiohttp
 
+
 class AsyncProposicoesExtractor(CamaraBaseExtractor):
     ENDPOINT = 'proposicoes'
     LEGISLATURA = 'legislaturas'
 
     async def extract(
-            self, 
-            autor: str = None, 
-            init_legislatura: int = None, 
-            sigla_partido_autor: list = None,
-            sigla_uf_autor: list = None,
-            tramitacao_senado: bool = None,
-            itens: int = 100,
-            request_tries: int = 4
-        ):
+        self,
+        autor: str = None,
+        init_legislatura: int = None,
+        sigla_partido_autor: list = None,
+        sigla_uf_autor: list = None,
+        tramitacao_senado: bool = None,
+        itens: int = 100,
+        request_tries: int = 4
+    ):
         session = aiohttp.ClientSession()
         legislatura = await self.client.get(session, self.LEGISLATURA, params={'id': init_legislatura})
         start_legislatura_date = legislatura['dados'][0].get('dataInicio', None)
@@ -24,13 +25,13 @@ class AsyncProposicoesExtractor(CamaraBaseExtractor):
         current_year = datetime.now().year
         start_year = start_legislatura_year if start_legislatura_year is not None else current_year
         years_range = range(start_year, current_year + 1)
-                       
+
         all_proposicoes = []
 
         for ano in years_range:
             page = 1
             empty_count = 0
-        
+
             while empty_count < request_tries:
                 try:
                     params = {
@@ -52,7 +53,7 @@ class AsyncProposicoesExtractor(CamaraBaseExtractor):
                         empty_count += 1
                         page += 1
                         continue
-                    
+
                     empty_count = 0
                     all_proposicoes.extend(data)
                     page += 1

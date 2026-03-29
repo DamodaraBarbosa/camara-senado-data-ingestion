@@ -2,6 +2,7 @@ from extractors.camara.base import CamaraBaseExtractor
 import asyncio
 import aiohttp
 
+
 class SituacoesOrgaoExtractor(CamaraBaseExtractor):
     ENDPOINT = 'referencias/situacoesOrgao'
 

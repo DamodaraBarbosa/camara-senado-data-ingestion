@@ -3,20 +3,21 @@ import json
 import asyncio
 import aiohttp
 
+
 class AsyncLegislaturaLideresExtractor(CamaraBaseExtractor):
     ENDPOINT = 'legislaturas/{id}/lideres'
 
     async def _fetch_pages(
-            self,
-            session,
-            id_legislatura,
-            request_tries,
-            itens  
-        ):
+        self,
+        session,
+        id_legislatura,
+        request_tries,
+        itens
+    ):
         extracted_data = []
         page = 1
         empty_count = 0
-        
+
         while empty_count < request_tries:
             try:
                 current_params = {
@@ -36,7 +37,7 @@ class AsyncLegislaturaLideresExtractor(CamaraBaseExtractor):
 
                 for lider in data:
                     lider['idLegislatura'] = id_legislatura
-                                
+
                 extracted_data.extend(data)
                 empty_count = 0
                 page += 1
@@ -48,11 +49,11 @@ class AsyncLegislaturaLideresExtractor(CamaraBaseExtractor):
         return extracted_data
 
     async def extract(
-            self,
-            legislaturas: json,
-            itens: int = 100,
-            request_tries: int = 4
-        ):
+        self,
+        legislaturas: json,
+        itens: int = 100,
+        request_tries: int = 4
+    ):
         legislaturas_ids = list(legislatura.get('id') for legislatura in legislaturas if legislatura.get('id'))
 
         async with aiohttp.ClientSession() as session:
@@ -72,4 +73,3 @@ class AsyncLegislaturaLideresExtractor(CamaraBaseExtractor):
             all_lideres = [item for sublist in results if sublist for item in sublist]
 
             return all_lideres
-        

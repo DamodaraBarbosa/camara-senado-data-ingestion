@@ -2,13 +2,14 @@ from extractors.camara.base import CamaraBaseExtractor
 import aiohttp
 import asyncio
 
+
 class AsyncEventosPautaExtractor(CamaraBaseExtractor):
     ENDPOINT = 'eventos/{id}/pauta'
 
     async def extract(
-            self,
-            eventos
-        ):
+        self,
+        eventos
+    ):
         eventos_ids = list(evento.get('id') for evento in eventos if evento.get('id'))
         all_deputados = []
 

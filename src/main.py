@@ -5,6 +5,7 @@ from extractors.camara.eventos.deputados import AsyncEventosDeputadosExtractor
 import asyncio
 from datetime import datetime
 
+
 async def main():
     client = AsyncCamaraClient()
     eventos = AsyncEventosExtractor(client)

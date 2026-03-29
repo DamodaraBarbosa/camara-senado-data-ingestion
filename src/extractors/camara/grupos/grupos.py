@@ -2,6 +2,7 @@ from extractors.camara.base import CamaraBaseExtractor
 import aiohttp
 import asyncio
 
+
 class AsyncGruposExtractor(CamaraBaseExtractor):
     ENDPOINT = 'grupos'
     LEGISLATURAS = 'legislaturas'
@@ -11,12 +12,12 @@ class AsyncGruposExtractor(CamaraBaseExtractor):
         session,
         id_legislatura,
         request_tries,
-        itens  
+        itens
     ):
         extracted_data = []
         page = 1
         empty_count = 0
-        
+
         while empty_count < request_tries:
             try:
                 current_params = {
@@ -44,15 +45,15 @@ class AsyncGruposExtractor(CamaraBaseExtractor):
             except Exception as e:
                 print(f"Error fetching data for legislatura {id_legislatura}, page {page}: {e}")
                 empty_count += 1
-        
+
         return extracted_data
 
     async def extract(
-            self,
-            init_legislatura: int = None,
-            itens: int = 100,
-            request_tries: int = 4
-        ):
+        self,
+        init_legislatura: int = None,
+        itens: int = 100,
+        request_tries: int = 4
+    ):
         all_grupos = []
 
         async with aiohttp.ClientSession() as session:
@@ -60,10 +61,10 @@ class AsyncGruposExtractor(CamaraBaseExtractor):
             legislaturas_data = legislaturas.get('dados', [])
             current_legislatura = max([l['id'] for l in legislaturas_data]) if legislaturas_data else 0
 
-            start = init_legislatura if init_legislatura is not None else current_legislatura   
+            start = init_legislatura if init_legislatura is not None else current_legislatura
 
             for id_legislatura in range(start, current_legislatura + 1):
                 frentes_data = await self._fetch_pages(session, id_legislatura, request_tries, itens)
                 all_grupos.extend(frentes_data)
-        
-        return all_grupos     
+
+        return all_grupos

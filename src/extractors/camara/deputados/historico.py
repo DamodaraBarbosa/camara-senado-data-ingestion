@@ -2,6 +2,7 @@ from extractors.camara.base import CamaraBaseExtractor
 import json
 import aiohttp
 
+
 class AsyncHistoricoExtractor(CamaraBaseExtractor):
     ENDPOINT = 'deputados/{id}/historico'
 
@@ -14,11 +15,11 @@ class AsyncHistoricoExtractor(CamaraBaseExtractor):
             for deputado_id in deputados_ids:
                 response = await self.client.get(session, self.ENDPOINT.format(id=deputado_id))
                 data = response.get('dados', [])
-                
+
                 for historico in data:
                     historico['deputado_id'] = deputado_id
-                
-                print(f'ID: {deputado_id} | Data ID: {data[0].get("deputado_id", None)} | Data length: {len(data)}')  
+
+                print(f'ID: {deputado_id} | Data ID: {data[0].get("deputado_id", None)} | Data length: {len(data)}')
 
                 all_historico.extend(data)
 

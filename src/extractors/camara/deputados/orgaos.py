@@ -2,15 +2,16 @@ from extractors.camara.base import CamaraBaseExtractor
 import json
 import aiohttp
 
+
 class AsyncOrgaosExtractor(CamaraBaseExtractor):
     ENDPOINT = 'deputados/{id}/orgaos'
 
     async def extract(
-            self, deputados: json,
-            init_legislatura: int = None,
-            items: int = 50,
-            request_tries: int = 4
-        ):
+        self, deputados: json,
+        init_legislatura: int = None,
+        items: int = 50,
+        request_tries: int = 4
+    ):
         session = aiohttp.ClientSession()
         legislatura = await self.client.get(session, 'legislaturas', params={'id': init_legislatura})
         start_legislatura_date = legislatura['dados'][0].get('dataInicio', None)
@@ -21,7 +22,7 @@ class AsyncOrgaosExtractor(CamaraBaseExtractor):
         for deputado_id in deputados_ids:
             page = 1
             empty_count = 0
-            
+
             print(f'Extracting orgaos for deputado ID: {deputado_id}')
             while empty_count < request_tries:
                 try:
@@ -45,7 +46,7 @@ class AsyncOrgaosExtractor(CamaraBaseExtractor):
 
                     for orgao in data:
                         orgao['deputado_id'] = deputado_id
-                    
+
                     all_orgaos.extend(data)
                     page += 1
 

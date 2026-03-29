@@ -2,6 +2,7 @@ from extractors.camara.base import CamaraBaseExtractor
 import json
 import aiohttp
 
+
 class AsyncIdsExtractor(CamaraBaseExtractor):
     ENDPOINT = 'deputados/'
 

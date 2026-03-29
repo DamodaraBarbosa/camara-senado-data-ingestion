@@ -2,13 +2,14 @@ from extractors.camara.base import CamaraBaseExtractor
 import aiohttp
 import asyncio
 
+
 class AsyncFrentesMembrosExtractor(CamaraBaseExtractor):
     ENDPOINT = 'frentes/{id}/membros'
 
     async def extract(
-            self, 
-            frentes
-        ):
+        self,
+        frentes
+    ):
         frentes_ids = list(frente.get('id') for frente in frentes if frente.get('id'))
         all_membros = []
 
@@ -27,5 +28,5 @@ class AsyncFrentesMembrosExtractor(CamaraBaseExtractor):
                 for membro in membros_data:
                     membro['idFrente'] = frente_id
                 all_membros.extend(membros_data)
-        
+
         return all_membros

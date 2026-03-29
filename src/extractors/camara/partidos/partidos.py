@@ -4,19 +4,20 @@ import aiohttp
 from datetime import datetime, date
 from utils.utils import add_months
 
+
 class AsyncPartidosExtractor(CamaraBaseExtractor):
     ENDPOINT = 'partidos'
     LEGISLATURA = 'legislaturas'
 
     async def _fetch_period_pages(
-            self,
-            session,
-            current_start_date,
-            id_legislatura,
-            request_tries,
-            sigla,
-            itens
-        ):
+        self,
+        session,
+        current_start_date,
+        id_legislatura,
+        request_tries,
+        sigla,
+        itens
+    ):
         extracted_data = []
         page = 1
         empty_count = 0
@@ -30,7 +31,7 @@ class AsyncPartidosExtractor(CamaraBaseExtractor):
                 }
 
                 current_params = {k: v for k, v in current_params.items() if v is not None}
-                
+
                 response = await self.client.get(session, self.ENDPOINT, params=current_params)
                 data = response.get('dados', [])
 
@@ -51,14 +52,14 @@ class AsyncPartidosExtractor(CamaraBaseExtractor):
                 break
 
         return extracted_data
-    
+
     async def extract(
-            self,
-            init_legislatura: int = None,
-            sigla: list = None,
-            itens: int = 100,
-            request_tries: int = 4
-        ):
+        self,
+        init_legislatura: int = None,
+        sigla: list = None,
+        itens: int = 100,
+        request_tries: int = 4
+    ):
         async with aiohttp.ClientSession() as session:
             legislatura = await self.client.get(session, self.LEGISLATURA, params={'id': init_legislatura})
             start_legislatura_date = legislatura['dados'][0].get('dataInicio', None)

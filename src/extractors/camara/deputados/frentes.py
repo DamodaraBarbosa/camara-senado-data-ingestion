@@ -2,6 +2,7 @@ from extractors.camara.base import CamaraBaseExtractor
 import json
 import aiohttp
 
+
 class AsyncFrentesExtractor(CamaraBaseExtractor):
     ENDPOINT = 'deputados/{id}/frentes'
 
@@ -14,10 +15,10 @@ class AsyncFrentesExtractor(CamaraBaseExtractor):
             for deputado_id in deputados_ids:
                 response = await self.client.get(session, self.ENDPOINT.format(id=deputado_id))
                 data = response.get('dados', [])
-                
+
                 for frente in data:
                     frente['deputado_id'] = deputado_id
-                
+
                 all_frentes.extend(data)
 
         except Exception as e:

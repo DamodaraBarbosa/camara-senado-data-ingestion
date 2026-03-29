@@ -2,16 +2,17 @@ from extractors.camara.base import CamaraBaseExtractor
 import json
 import aiohttp
 
+
 class AsyncEventosExtractor(CamaraBaseExtractor):
     ENDPOINT = 'deputados/{id}/eventos'
 
     async def extract(
-            self, 
-            deputados: json, 
-            init_legislatura: int = None,
-            items: int = 50,
-            request_tries: int = 4
-        ):
+        self,
+        deputados: json,
+        init_legislatura: int = None,
+        items: int = 50,
+        request_tries: int = 4
+    ):
         session = aiohttp.ClientSession()
         legislatura = await self.client.get(session, 'legislaturas', params={'id': init_legislatura})
         start_legislatura_date = legislatura['dados'][0].get('dataInicio', None)
@@ -45,7 +46,7 @@ class AsyncEventosExtractor(CamaraBaseExtractor):
 
                     for evento in data:
                         evento['deputado_id'] = deputado_id
-                    
+
                     all_eventos.extend(data)
                     page += 1
 

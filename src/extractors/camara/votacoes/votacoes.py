@@ -4,32 +4,33 @@ import aiohttp
 from datetime import datetime, date
 from utils.utils import add_months
 
+
 class AsyncVotacoesExtractor(CamaraBaseExtractor):
     ENDPOINT = 'votacoes'
     LEGISLATURA = 'legislaturas'
 
     async def _fetch_period_pages(
-            self, 
-            session, 
-            id_legislatura, 
-            current_start_date, 
-            request_tries, 
-            id_proposicao, 
-            id_evento, 
-            id_orgao, 
-            itens
-        ):
+        self,
+        session,
+        id_legislatura,
+        current_start_date,
+        request_tries,
+        id_proposicao,
+        id_evento,
+        id_orgao,
+        itens
+    ):
         base_params = {
             'idProposicao': id_proposicao,
             'idEvento': id_evento,
             'idOrgao': id_orgao,
             'itens': itens
         }
-        
+
         extracted_data = []
         page = 1
         empty_count = 0
-        current_params = {}  
+        current_params = {}
 
         while empty_count < request_tries:
             try:
@@ -59,7 +60,7 @@ class AsyncVotacoesExtractor(CamaraBaseExtractor):
             except Exception as e:
                 print(f'Error fetching votacoes from API with params {current_params}. Error: {e}')
                 break
-        
+
         return extracted_data
 
     async def extract(
@@ -92,7 +93,7 @@ class AsyncVotacoesExtractor(CamaraBaseExtractor):
 
                 if current_start_date > date.today():
                     break
-            
+
                 temp_date = current_start_date
                 while temp_date.year == ano:
                     task = self._fetch_period_pages(
