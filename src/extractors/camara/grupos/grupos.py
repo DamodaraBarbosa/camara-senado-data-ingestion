@@ -1,6 +1,5 @@
 from extractors.camara.base import CamaraBaseExtractor
 import aiohttp
-import asyncio
 
 
 class AsyncGruposExtractor(CamaraBaseExtractor):
@@ -59,7 +58,7 @@ class AsyncGruposExtractor(CamaraBaseExtractor):
         async with aiohttp.ClientSession() as session:
             legislaturas = await self.client.get(session, self.LEGISLATURAS)
             legislaturas_data = legislaturas.get('dados', [])
-            current_legislatura = max([l['id'] for l in legislaturas_data]) if legislaturas_data else 0
+            current_legislatura = max([leg['id'] for leg in legislaturas_data]) if legislaturas_data else 0
 
             start = init_legislatura if init_legislatura is not None else current_legislatura
 

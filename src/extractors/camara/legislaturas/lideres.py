@@ -54,7 +54,11 @@ class AsyncLegislaturaLideresExtractor(CamaraBaseExtractor):
         itens: int = 100,
         request_tries: int = 4
     ):
-        legislaturas_ids = list(legislatura.get('id') for legislatura in legislaturas if legislatura.get('id'))
+        legislaturas_ids = [
+            legislatura.get('id')
+            for legislatura in legislaturas
+            if legislatura.get('id')
+        ]
 
         async with aiohttp.ClientSession() as session:
             tasks = []
