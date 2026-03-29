@@ -50,7 +50,7 @@ class AsyncOrgaosVotacoesExtractor(CamaraBaseExtractor):
                     votacao['idLegislatura'] = legislatura
                     votacao['idOrgao'] = id_orgao
 
-                extracted_data.append(data)
+                extracted_data.extend(data)
                 empty_count = 0
                 page += 1
 
