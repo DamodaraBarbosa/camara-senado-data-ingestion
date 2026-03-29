@@ -32,7 +32,7 @@ class AsyncCamaraClient:
                         wait_time = response.headers.get('Retry-After', '30')
                         await asyncio.sleep(int(wait_time))
 
-                        response.raise_for_status()
+                    response.raise_for_status()
 
                     text = await response.text()
                     if not text:
@@ -42,4 +42,4 @@ class AsyncCamaraClient:
 
                 except Exception as e:
                     print(f'Error: {e}')
-                    raise 
+                    raise
