@@ -55,8 +55,13 @@ class AsyncOrgaosVotacoesExtractor(CamaraBaseExtractor):
                 page += 1
 
             except Exception as e:
+                resp_status = "N/A"
+                if 'response' in locals() and hasattr(response, 'status'):
+                    resp_status = response.status
                 print(
-                    f'Error fetching votacoes from API with params {current_params}. Error: {e.__class__.__name__}: {e}. Response: {response.status if "response" in locals() and hasattr(response, "status") else "N/A"}')
+                    f'Error fetching votacoes from API with params {current_params}. '
+                    f'Error: {e.__class__.__name__}: {e}. Response: {resp_status}'
+                )
                 break
 
         return extracted_data
@@ -69,7 +74,11 @@ class AsyncOrgaosVotacoesExtractor(CamaraBaseExtractor):
         request_tries: int = 4
     ):
         async with aiohttp.ClientSession() as session:
-            orgaos_id = list(dict.fromkeys(orgao.get('id') for orgao in orgaos if orgao.get('id')))
+            orgaos_id = list(
+                dict.fromkeys(
+                    [orgao.get('id') for orgao in orgaos if orgao.get('id')]
+                )
+            )
             start_legislatura = await self.client.get(session, self.LEGISLATURA_ENDPOINT, params={'id': init_legislatura})
             start_legislatura_date = start_legislatura['dados'][0].get('dataInicio', None)
             start_legislatura_year = int(start_legislatura_date.split('-')[0]) if start_legislatura_date else None

@@ -1,5 +1,4 @@
 from extractors.camara.base import CamaraBaseExtractor
-from datetime import datetime
 import json
 import aiohttp
 

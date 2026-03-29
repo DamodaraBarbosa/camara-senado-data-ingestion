@@ -68,7 +68,11 @@ class AsyncMembrosExtractor(CamaraBaseExtractor):
         request_tries: int = 4
     ):
         async with aiohttp.ClientSession() as session:
-            orgaos_id = list(dict.fromkeys(orgao.get('id') for orgao in orgaos if orgao.get('id')))
+            orgaos_id = list(
+                dict.fromkeys(
+                    [orgao.get('id') for orgao in orgaos if orgao.get('id')]
+                )
+            )
             start_legislatura = await self.client.get(session, self.LEGISLATURA_ENDPOINT, params={'id': init_legislatura})
             start_legislatura_date = start_legislatura['dados'][0].get('dataInicio', None)
             start_legislatura_year = int(start_legislatura_date.split('-')[0]) if start_legislatura_date else None
