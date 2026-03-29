@@ -13,7 +13,7 @@ class AsyncOrgaosVotacoesExtractor(CamaraBaseExtractor):
     async def _fetch_period_pages(
         self,
         session,
-        legilslatura,
+        legislatura,
         current_start_date,
         request_tries,
         id_orgao,
@@ -23,7 +23,7 @@ class AsyncOrgaosVotacoesExtractor(CamaraBaseExtractor):
             'itens': itens
         }
 
-        extracted_date = []
+        extracted_data = []
         page = 1
         empty_count = 0
         current_params = {}
@@ -47,10 +47,10 @@ class AsyncOrgaosVotacoesExtractor(CamaraBaseExtractor):
                     continue
 
                 for votacao in data:
-                    votacao['idLegislatura'] = legilslatura
+                    votacao['idLegislatura'] = legislatura
                     votacao['idOrgao'] = id_orgao
 
-                extracted_date.append(data)
+                extracted_data.append(data)
                 empty_count = 0
                 page += 1
 
@@ -59,7 +59,7 @@ class AsyncOrgaosVotacoesExtractor(CamaraBaseExtractor):
                     f'Error fetching votacoes from API with params {current_params}. Error: {e.__class__.__name__}: {e}. Response: {response.status if "response" in locals() and hasattr(response, "status") else "N/A"}')
                 break
 
-        return extracted_date
+        return extracted_data
 
     async def extract(
         self,
