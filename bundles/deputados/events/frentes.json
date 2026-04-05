@@ -1,0 +1,8 @@
+{
+  "extractor": "frentes",
+  "destination": {
+    "type": "local",
+    "path": "/tmp/frentes.json"
+  },
+  "run_id": "frentes-local"
+}

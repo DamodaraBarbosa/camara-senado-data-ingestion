@@ -1,0 +1,8 @@
+{
+  "extractor": "historico",
+  "destination": {
+    "type": "local",
+    "path": "/tmp/historico.json"
+  },
+  "run_id": "historico-local"
+}

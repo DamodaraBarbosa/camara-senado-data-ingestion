@@ -23,7 +23,6 @@ class AsyncDiscursosExtractor(CamaraBaseExtractor):
         all_discursos = []
 
         for legislatura in range(start_legislatura, current_legislatura + 1):
-            print(f'Legislatura: {legislatura}')
             for deputado_id in deputados_ids:
                 page = 1
                 empty_count = 0

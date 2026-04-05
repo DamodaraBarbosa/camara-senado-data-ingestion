@@ -1,0 +1,8 @@
+{
+  "extractor": "profissoes",
+  "destination": {
+    "type": "local",
+    "path": "/tmp/profissoes.json"
+  },
+  "run_id": "profissoes-local"
+}

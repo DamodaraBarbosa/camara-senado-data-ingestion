@@ -1,0 +1,8 @@
+{
+  "extractor": "ocupacoes",
+  "destination": {
+    "type": "local",
+    "path": "/tmp/ocupacoes.json"
+  },
+  "run_id": "ocupacoes-local"
+}
