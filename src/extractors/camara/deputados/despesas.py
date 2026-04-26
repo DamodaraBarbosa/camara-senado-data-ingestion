@@ -46,8 +46,6 @@ class AsyncDespesasExtractor(CamaraBaseExtractor):
         page = 1
         empty_count = 0
 
-        print(f'[despesas] Buscando deputado {deputado_id}...')
-
         while empty_count < request_tries:
             try:
                 params = {
@@ -73,12 +71,10 @@ class AsyncDespesasExtractor(CamaraBaseExtractor):
                     despesa['deputadoId'] = deputado_id
 
                 expenses.extend(data)
-                print(f'[despesas] Deputado {deputado_id} | página {page} | +{len(data)} despesas (total parcial: {len(expenses)})')
                 page += 1
 
             except Exception as e:
                 print(f'[despesas] Erro no deputado {deputado_id} (página {page}): {e}')
                 break
 
-        print(f'[despesas] Deputado {deputado_id} finalizado | {len(expenses)} despesas coletadas')
         return expenses

@@ -24,11 +24,7 @@ EXECUTION_ORDER = [
     "frentes",
     "profissoes",
     "ocupacoes",
-    "mandatos_externos",
     "despesas",
-    "historico",
-    "discursos",
-    "eventos",
     "orgaos"
 ]
 
