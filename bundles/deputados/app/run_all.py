@@ -61,4 +61,16 @@ async def run_all(base_destination: dict = None, run_id: str = "run-all"):
 
 
 if __name__ == "__main__":
-    asyncio.run(run_all())
+    import os
+
+    bucket = os.getenv("S3_BUCKET")
+    prefix = os.getenv("S3_PREFIX", "deputados")
+    run_id = os.getenv("RUN_ID", "run-all")
+
+    base_destination = (
+        {"type": "s3", "bucket": bucket, "prefix": prefix}
+        if bucket
+        else None
+    )
+
+    asyncio.run(run_all(base_destination=base_destination, run_id=run_id))
