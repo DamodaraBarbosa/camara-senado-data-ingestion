@@ -79,16 +79,19 @@ async def _run(event: dict):
     extractor_cls = EXTRACTORS.get(extractor_name)
     if not extractor_cls:
         raise ValueError(
-            f"Extractor '{extractor_name}' not found. Available: {list(EXTRACTORS)}")
+            f"Extractor '{extractor_name}' not found. Available: {list(EXTRACTORS)}"
+        )
 
     client = AsyncCamaraClient()
 
     resolved_params = dict(params)
     for param_name, dep_extractor_name in DEPENDENCIES.get(
-            extractor_name, {}).items():
+            extractor_name, {}
+        ).items():
         if param_name not in resolved_params:
             print(
-                f"[runner] Resolving dependency '{param_name}' via '{dep_extractor_name}'...")
+                f"[runner] Resolving dependency '{param_name}' via '{dep_extractor_name}'..."
+            )
             dep_cls = EXTRACTORS[dep_extractor_name]
             dep_data = await dep_cls(client).extract(
                 **{k: v for k, v in params.items()
@@ -96,7 +99,8 @@ async def _run(event: dict):
             )
             resolved_params[param_name] = dep_data
             print(
-                f"[runner] Dependency '{param_name}' resolved: {len(dep_data)} records.")
+                f"[runner] Dependency '{param_name}' resolved: {len(dep_data)} records."
+            )
 
     data = await extractor_cls(client).extract(**resolved_params)
 
@@ -106,14 +110,16 @@ async def _run(event: dict):
         "run_id": run_id,
         "extractor": extractor_name,
         "status": "success",
-        "records": len(data)}
+        "records": len(data)
+    }
 
 
 def _write_output(
         data: list,
         destination: dict,
         extractor_name: str,
-        run_id: str):
+        run_id: str
+    ):
     dest_type = destination.get("type", "local")
     content = json.dumps(data, ensure_ascii=False, indent=2)
 
@@ -132,7 +138,8 @@ def _write_output(
 
     else:
         out_path = destination.get(
-            "path", f"/tmp/{extractor_name}_{run_id}.json")
+            "path", f"/tmp/deputados/{extractor_name}_{run_id}.json"
+        )
         with open(out_path, "w", encoding="utf-8") as f:
             f.write(content)
         print(f"Saved {len(data)} records to {out_path}")
