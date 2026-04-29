@@ -5,7 +5,7 @@
   },
   "destination": {
     "type": "local",
-    "path": "/tmp/mesa.json"
+    "path": "/tmp/deputados/mesa.json"
   },
-  "run_id": "mesa-local"
+  "run_id": "deputados-mesa-local"
 }

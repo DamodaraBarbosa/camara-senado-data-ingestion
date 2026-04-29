@@ -7,7 +7,7 @@
   },
   "destination": {
     "type": "local",
-    "path": "/tmp/lideres.json"
+    "path": "/tmp/deputados/lideres.json"
   },
-  "run_id": "lideres-local"
+  "run_id": "deputados-lideres-local"
 }

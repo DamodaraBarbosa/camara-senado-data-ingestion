@@ -2,7 +2,7 @@
   "extractor": "ids",
   "destination": {
     "type": "local",
-    "path": "/tmp/ids.json"
+    "path": "/tmp/deputados/ids.json"
   },
-  "run_id": "ids-local"
+  "run_id": "deputados-ids-local"
 }

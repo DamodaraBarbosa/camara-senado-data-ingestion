@@ -2,7 +2,7 @@
   "extractor": "profissoes",
   "destination": {
     "type": "local",
-    "path": "/tmp/profissoes.json"
+    "path": "/tmp/deputados/profissoes.json"
   },
-  "run_id": "profissoes-local"
+  "run_id": "deputados-profissoes-local"
 }

@@ -7,7 +7,7 @@
   },
   "destination": {
     "type": "local",
-    "path": "/tmp/orgaos.json"
+    "path": "/tmp/deputados/orgaos.json"
   },
-  "run_id": "orgaos-local"
+  "run_id": "deputados-orgaos-local"
 }

@@ -2,7 +2,7 @@
   "extractor": "historico",
   "destination": {
     "type": "local",
-    "path": "/tmp/historico.json"
+    "path": "/tmp/deputados/historico.json"
   },
-  "run_id": "historico-local"
+  "run_id": "deputados-historico-local"
 }

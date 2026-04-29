@@ -2,7 +2,7 @@
   "extractor": "ocupacoes",
   "destination": {
     "type": "local",
-    "path": "/tmp/ocupacoes.json"
+    "path": "/tmp/deputados/ocupacoes.json"
   },
-  "run_id": "ocupacoes-local"
+  "run_id": "deputados-ocupacoes-local"
 }

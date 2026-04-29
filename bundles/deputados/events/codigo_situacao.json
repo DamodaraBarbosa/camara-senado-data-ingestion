@@ -3,7 +3,7 @@
   "params": {},
   "destination": {
     "type": "local",
-    "path": "/tmp/codigo_situacao.json"
+    "path": "/tmp/deputados/codigo_situacao.json"
   },
-  "run_id": "codigo-situacao-local"
+  "run_id": "deputados-codigo-situacao-local"
 }

@@ -7,7 +7,7 @@
   },
   "destination": {
     "type": "local",
-    "path": "/tmp/discursos.json"
+    "path": "/tmp/deputados/discursos.json"
   },
-  "run_id": "discursos-local"
+  "run_id": "deputados-discursos-local"
 }

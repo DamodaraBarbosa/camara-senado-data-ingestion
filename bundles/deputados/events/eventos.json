@@ -7,7 +7,7 @@
   },
   "destination": {
     "type": "local",
-    "path": "/tmp/eventos.json"
+    "path": "/tmp/deputados/eventos.json"
   },
-  "run_id": "eventos-local"
+  "run_id": "deputados-eventos-local"
 }
