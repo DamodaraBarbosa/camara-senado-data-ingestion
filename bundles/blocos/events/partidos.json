@@ -1,18 +1,8 @@
 {
   "extractor": "partidos",
-  "params": {
-    "init_legislatura": 56,
-    "id": null,
-    "sigla": null,
-    "sigla_sexo": null,
-    "order_by": null,
-    "order": null,
-    "items": 100,
-    "request_tries": 4
-  },
   "destination": {
     "type": "local",
-    "path": "/tmp/deputados.json"
+    "path": "/tmp/blocos/partidos.json"
   },
-  "run_id": "deputados-local"
+  "run_id": "blocos-partidos-local"
 }
