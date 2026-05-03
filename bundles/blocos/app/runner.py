@@ -1,8 +1,6 @@
 import sys
 from pathlib import Path
 
-from bundles.deputados.app.runner import _write_output
-
 # Allow running this script directly from the repo root without setting
 # PYTHONPATH. Add both the project root and the `src/` folder to sys.path
 # so imports like `clients.*` or `src.clients.*` work in local runs.
@@ -112,6 +110,7 @@ def _write_output(
         out_path = destination.get(
             "path", f"/tmp/blocos/{extractor_name}_{run_id}.json"
         )
+        Path(out_path).parent.mkdir(parents=True, exist_ok=True)
         with open(out_path, "w", encoding="utf-8") as f:
             f.write(content)
         print(f"Saved {len(data)} records to {out_path}")
@@ -126,4 +125,3 @@ if __name__ == "__main__":
     
     result = asyncio.run(_run(event))
     print(json.dumps(result, ensure_ascii=False, indent=2))
-    
