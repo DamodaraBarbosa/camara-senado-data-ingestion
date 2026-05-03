@@ -140,6 +140,7 @@ def _write_output(
         out_path = destination.get(
             "path", f"/tmp/deputados/{extractor_name}_{run_id}.json"
         )
+        Path(out_path).parent.mkdir(parents=True, exist_ok=True)
         with open(out_path, "w", encoding="utf-8") as f:
             f.write(content)
         print(f"Saved {len(data)} records to {out_path}")
