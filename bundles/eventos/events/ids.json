@@ -1,0 +1,9 @@
+{
+  "extractor": "ids",
+  "params": {},
+  "destination": {
+    "type": "local",
+    "path": "/tmp/eventos/ids.json"
+  },
+  "run_id": "eventos-ids-local"
+}
