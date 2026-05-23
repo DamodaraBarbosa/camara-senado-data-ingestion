@@ -1,0 +1,11 @@
+{
+  "extractor": "tramitacoes",
+  "params": {
+    "data_inicio": null
+  },
+  "destination": {
+    "type": "local",
+    "path": "/tmp/proposicoes/tramitacoes.json"
+  },
+  "run_id": "proposicoes-tramitacoes-local"
+}

@@ -1,0 +1,9 @@
+{
+  "extractor": "membros",
+  "params": {},
+  "destination": {
+    "type": "local",
+    "path": "/tmp/partidos/membros.json"
+  },
+  "run_id": "partidos-membros-local"
+}

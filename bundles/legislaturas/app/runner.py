@@ -15,28 +15,22 @@ import asyncio
 import json
 
 from clients.camara_client import AsyncCamaraClient
-from extractors.camara.eventos.eventos import AsyncEventosExtractor
-from extractors.camara.eventos.ids import AsyncEventosIdsExtractor
-from extractors.camara.eventos.deputados import AsyncEventosDeputadosExtractor
-from extractors.camara.eventos.orgaos import AsyncEventosOrgaosExtractor
-from extractors.camara.eventos.pauta import AsyncEventosPautaExtractor
-from extractors.camara.eventos.votacoes import AsyncEventosVotacoesExtractor
+from extractors.camara.legislaturas.legislaturas import AsyncLegislaturaExtractor
+from extractors.camara.legislaturas.ids import AsyncLegislaturaIdsExtractor
+from extractors.camara.legislaturas.lideres import AsyncLegislaturaLideresExtractor
+from extractors.camara.legislaturas.mesa import AsyncMesaExtractor
 
 EXTRACTORS = {
-    "eventos": AsyncEventosExtractor,
-    "ids": AsyncEventosIdsExtractor,
-    "deputados": AsyncEventosDeputadosExtractor,
-    "orgaos": AsyncEventosOrgaosExtractor,
-    "pauta": AsyncEventosPautaExtractor,
-    "votacoes": AsyncEventosVotacoesExtractor,
+    "legislaturas": AsyncLegislaturaExtractor,
+    "ids": AsyncLegislaturaIdsExtractor,
+    "lideres": AsyncLegislaturaLideresExtractor,
+    "mesa": AsyncMesaExtractor,
 }
 
 DEPENDENCIES = {
-    "ids":       {"eventos": "eventos"},
-    "deputados": {"eventos": "eventos"},
-    "orgaos":    {"eventos": "eventos"},
-    "pauta":     {"eventos": "eventos"},
-    "votacoes":  {"eventos": "eventos"},
+    "ids":     {"legislaturas": "legislaturas"},
+    "lideres": {"legislaturas": "legislaturas"},
+    "mesa":    {"legislaturas": "legislaturas"},
 }
 
 
@@ -118,7 +112,7 @@ def _write_output(
         print(f"[runner] Written {len(data)} records to s3://{bucket}/{key}")
 
     elif dest_type == "local":
-        output_path = Path(destination.get("path", f"/tmp/eventos/{extractor_name}.json"))
+        output_path = Path(destination.get("path", f"/tmp/legislaturas/{extractor_name}.json"))
         output_path.parent.mkdir(parents=True, exist_ok=True)
         with open(output_path, "w", encoding="utf-8") as f:
             f.write(content)

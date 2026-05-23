@@ -15,28 +15,19 @@ import asyncio
 import json
 
 from clients.camara_client import AsyncCamaraClient
-from extractors.camara.eventos.eventos import AsyncEventosExtractor
-from extractors.camara.eventos.ids import AsyncEventosIdsExtractor
-from extractors.camara.eventos.deputados import AsyncEventosDeputadosExtractor
-from extractors.camara.eventos.orgaos import AsyncEventosOrgaosExtractor
-from extractors.camara.eventos.pauta import AsyncEventosPautaExtractor
-from extractors.camara.eventos.votacoes import AsyncEventosVotacoesExtractor
+from extractors.camara.frentes.frentes import AsyncFrentesExtractor
+from extractors.camara.frentes.ids import AsyncFrentesIdsExtractor
+from extractors.camara.frentes.membros import AsyncFrentesMembrosExtractor
 
 EXTRACTORS = {
-    "eventos": AsyncEventosExtractor,
-    "ids": AsyncEventosIdsExtractor,
-    "deputados": AsyncEventosDeputadosExtractor,
-    "orgaos": AsyncEventosOrgaosExtractor,
-    "pauta": AsyncEventosPautaExtractor,
-    "votacoes": AsyncEventosVotacoesExtractor,
+    "frentes": AsyncFrentesExtractor,
+    "ids": AsyncFrentesIdsExtractor,
+    "membros": AsyncFrentesMembrosExtractor,
 }
 
 DEPENDENCIES = {
-    "ids":       {"eventos": "eventos"},
-    "deputados": {"eventos": "eventos"},
-    "orgaos":    {"eventos": "eventos"},
-    "pauta":     {"eventos": "eventos"},
-    "votacoes":  {"eventos": "eventos"},
+    "ids":     {"frentes": "frentes"},
+    "membros": {"frentes": "frentes"},
 }
 
 
@@ -118,7 +109,7 @@ def _write_output(
         print(f"[runner] Written {len(data)} records to s3://{bucket}/{key}")
 
     elif dest_type == "local":
-        output_path = Path(destination.get("path", f"/tmp/eventos/{extractor_name}.json"))
+        output_path = Path(destination.get("path", f"/tmp/frentes/{extractor_name}.json"))
         output_path.parent.mkdir(parents=True, exist_ok=True)
         with open(output_path, "w", encoding="utf-8") as f:
             f.write(content)

@@ -1,0 +1,15 @@
+{
+  "extractor": "orgaos",
+  "params": {
+    "init_legislatura": 56,
+    "id_orgao": null,
+    "sigla": null,
+    "itens": 100,
+    "request_tries": 4
+  },
+  "destination": {
+    "type": "local",
+    "path": "/tmp/orgaos/orgaos.json"
+  },
+  "run_id": "orgaos-orgaos-local"
+}
