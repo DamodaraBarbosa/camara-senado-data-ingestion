@@ -63,8 +63,11 @@ class AsyncOrgaosExtractor(CamaraBaseExtractor):
         request_tries: int = 4
     ):
         async with aiohttp.ClientSession() as session:
-            legislatura = await self.client.get(session, self.LEGISLATURA, params={'id': init_legislatura})
-            start_legislatura_date = legislatura['dados'][0].get('dataInicio', None)
+            params = {}
+            if init_legislatura is not None:
+                params['id'] = init_legislatura
+            legislatura = await self.client.get(session, self.LEGISLATURA, params=params)
+            start_legislatura_date = legislatura['dados'][0].get('dataInicio', None) if legislatura.get('dados') else None
             start_legislatura_year = int(start_legislatura_date.split('-')[0]) if start_legislatura_date else None
 
             current_year = datetime.now().year
@@ -74,9 +77,9 @@ class AsyncOrgaosExtractor(CamaraBaseExtractor):
             tasks = []
 
             for index, ano in enumerate(years_range):
-                id_legislatura = init_legislatura + (index // 4)
+                id_legislatura = init_legislatura + (index // 4) if init_legislatura is not None else None
 
-                if index % 4 == 0 and id_legislatura == init_legislatura:
+                if init_legislatura is not None and index % 4 == 0 and id_legislatura == init_legislatura:
                     current_start_date = date(ano, 2, 1)
                 else:
                     current_start_date = date(ano, 1, 1)
