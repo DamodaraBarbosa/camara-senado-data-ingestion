@@ -56,6 +56,8 @@ class AsyncOrgaosExtractor(CamaraBaseExtractor):
                     continue
 
                 empty_count = 0
+                for orgao in data:
+                    orgao['deputado_id'] = deputado_id
                 bodies.extend(data)
                 page += 1
 
