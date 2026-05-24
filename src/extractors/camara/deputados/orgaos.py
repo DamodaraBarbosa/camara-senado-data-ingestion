@@ -45,6 +45,7 @@ class AsyncOrgaosExtractor(CamaraBaseExtractor):
                     'pagina': page,
                     'itens': items
                 }
+                params = {k: v for k, v in params.items() if v is not None}
 
                 response = await self.client.get(session, self.ENDPOINT.format(id=deputado_id), params=params)
                 data = response.get('dados', [])
