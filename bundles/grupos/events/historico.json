@@ -1,0 +1,9 @@
+{
+  "extractor": "historico",
+  "params": {},
+  "destination": {
+    "type": "local",
+    "path": "/tmp/grupos/historico.json"
+  },
+  "run_id": "grupos-historico-local"
+}

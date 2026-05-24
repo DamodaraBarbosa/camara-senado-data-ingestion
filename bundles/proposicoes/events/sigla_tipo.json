@@ -1,0 +1,9 @@
+{
+  "extractor": "sigla_tipo",
+  "params": {},
+  "destination": {
+    "type": "local",
+    "path": "/tmp/proposicoes/sigla_tipo.json"
+  },
+  "run_id": "proposicoes-sigla-tipo-local"
+}

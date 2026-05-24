@@ -19,7 +19,6 @@ class AsyncProfissoesExtractor(CamaraBaseExtractor):
                 for profissao in data:
                     profissao['deputado_id'] = deputado_id
 
-                print(f'ID: {deputado_id} | Profissões Extracted: {data}')
                 all_profissoes.extend(data)
 
         except Exception as e:

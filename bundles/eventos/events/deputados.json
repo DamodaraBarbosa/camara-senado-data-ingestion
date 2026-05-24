@@ -1,0 +1,9 @@
+{
+  "extractor": "deputados",
+  "params": {},
+  "destination": {
+    "type": "local",
+    "path": "/tmp/eventos/deputados.json"
+  },
+  "run_id": "eventos-deputados-local"
+}

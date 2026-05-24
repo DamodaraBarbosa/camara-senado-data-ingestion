@@ -1,0 +1,9 @@
+{
+  "extractor": "ids",
+  "params": {},
+  "destination": {
+    "type": "local",
+    "path": "/tmp/grupos/ids.json"
+  },
+  "run_id": "grupos-ids-local"
+}

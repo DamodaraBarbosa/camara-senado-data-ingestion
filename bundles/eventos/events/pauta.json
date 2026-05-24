@@ -1,0 +1,9 @@
+{
+  "extractor": "pauta",
+  "params": {},
+  "destination": {
+    "type": "local",
+    "path": "/tmp/eventos/pauta.json"
+  },
+  "run_id": "eventos-pauta-local"
+}

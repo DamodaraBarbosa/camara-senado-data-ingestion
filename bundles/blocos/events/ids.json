@@ -1,0 +1,8 @@
+{
+    "extractor": "ids",
+    "destination": {
+        "type": "local",
+        "path": "/tmp/blocos/ids.json"
+    },
+    "run_id": "blocos-ids-local"
+}

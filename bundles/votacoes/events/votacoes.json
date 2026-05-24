@@ -1,0 +1,16 @@
+{
+  "extractor": "votacoes",
+  "params": {
+    "init_legislatura": 56,
+    "id_proposicao": null,
+    "id_evento": null,
+    "id_orgao": null,
+    "itens": 100,
+    "request_tries": 4
+  },
+  "destination": {
+    "type": "local",
+    "path": "/tmp/votacoes/votacoes.json"
+  },
+  "run_id": "votacoes-votacoes-local"
+}

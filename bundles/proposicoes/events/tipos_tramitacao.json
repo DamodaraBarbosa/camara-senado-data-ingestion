@@ -1,0 +1,9 @@
+{
+  "extractor": "tipos_tramitacao",
+  "params": {},
+  "destination": {
+    "type": "local",
+    "path": "/tmp/proposicoes/tipos_tramitacao.json"
+  },
+  "run_id": "proposicoes-tipos-tramitacao-local"
+}

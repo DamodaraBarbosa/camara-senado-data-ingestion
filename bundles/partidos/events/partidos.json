@@ -1,0 +1,14 @@
+{
+  "extractor": "partidos",
+  "params": {
+    "init_legislatura": 56,
+    "sigla": null,
+    "itens": 100,
+    "request_tries": 4
+  },
+  "destination": {
+    "type": "local",
+    "path": "/tmp/partidos/partidos.json"
+  },
+  "run_id": "partidos-partidos-local"
+}

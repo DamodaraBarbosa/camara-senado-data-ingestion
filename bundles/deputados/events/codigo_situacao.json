@@ -1,0 +1,9 @@
+{
+  "extractor": "codigo_situacao",
+  "params": {},
+  "destination": {
+    "type": "local",
+    "path": "/tmp/deputados/codigo_situacao.json"
+  },
+  "run_id": "deputados-codigo-situacao-local"
+}

@@ -1,0 +1,9 @@
+{
+  "extractor": "relacionadas",
+  "params": {},
+  "destination": {
+    "type": "local",
+    "path": "/tmp/proposicoes/relacionadas.json"
+  },
+  "run_id": "proposicoes-relacionadas-local"
+}

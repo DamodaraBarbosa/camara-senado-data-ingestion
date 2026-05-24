@@ -22,8 +22,6 @@ class AsyncFrentesMembrosExtractor(CamaraBaseExtractor):
 
             results = await asyncio.gather(*tasks)
 
-            print(f'Frentes IDs: {frentes_ids}')
-
             for index, result in enumerate(results):
                 membros_data = result.get('dados', [])
                 for membro in membros_data:

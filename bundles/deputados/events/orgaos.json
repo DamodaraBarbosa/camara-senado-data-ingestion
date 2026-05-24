@@ -1,0 +1,13 @@
+{
+  "extractor": "orgaos",
+  "params": {
+    "init_legislatura": 56,
+    "items": 50,
+    "request_tries": 4
+  },
+  "destination": {
+    "type": "local",
+    "path": "/tmp/deputados/orgaos.json"
+  },
+  "run_id": "deputados-orgaos-local"
+}

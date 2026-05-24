@@ -1,0 +1,9 @@
+{
+  "extractor": "orientacoes",
+  "params": {},
+  "destination": {
+    "type": "local",
+    "path": "/tmp/votacoes/orientacoes.json"
+  },
+  "run_id": "votacoes-orientacoes-local"
+}

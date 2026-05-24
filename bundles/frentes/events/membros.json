@@ -1,0 +1,9 @@
+{
+  "extractor": "membros",
+  "params": {},
+  "destination": {
+    "type": "local",
+    "path": "/tmp/frentes/membros.json"
+  },
+  "run_id": "frentes-membros-local"
+}

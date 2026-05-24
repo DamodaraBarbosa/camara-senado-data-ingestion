@@ -1,0 +1,18 @@
+{
+  "extractor": "deputados",
+  "params": {
+    "init_legislatura": 56,
+    "sigla_partido": null,
+    "sigla_uf": null,
+    "sigla_sexo": null,
+    "order_by": null,
+    "order": null,
+    "items": 100,
+    "request_tries": 4
+  },
+  "destination": {
+    "type": "local",
+    "path": "/tmp/deputados/deputados.json"
+  },
+  "run_id": "deputados-deputados-local"
+}

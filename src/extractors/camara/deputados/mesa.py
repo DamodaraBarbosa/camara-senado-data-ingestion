@@ -17,10 +17,7 @@ class AsyncMesaExtractor(CamaraBaseExtractor):
         try:
             for legislatura in range(start, current_legislatura + 1):
                 response = await self.client.get(session, self.ENDPOINT.format(id=legislatura))
-                print(f'Response: {response}')
                 data = response.get('dados', [])
-
-                print(f'Legislatura ID: {legislatura}, Data Length: {len(data)}')
                 all_mesa.extend(data)
 
         except Exception as e:

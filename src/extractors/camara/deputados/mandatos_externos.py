@@ -15,7 +15,7 @@ class AsyncMandatosExternosExtractor(CamaraBaseExtractor):
             for deputado_id in deputados_ids:
                 response = await self.client.get(session, self.ENDPOINT.format(id=deputado_id))
                 data = response.get('dados', [])
-                print(deputado_id)
+
                 for mandato in data:
                     mandato['deputado_id'] = deputado_id
 

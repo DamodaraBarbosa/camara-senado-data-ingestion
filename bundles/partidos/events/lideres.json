@@ -1,0 +1,9 @@
+{
+  "extractor": "lideres",
+  "params": {},
+  "destination": {
+    "type": "local",
+    "path": "/tmp/partidos/lideres.json"
+  },
+  "run_id": "partidos-lideres-local"
+}

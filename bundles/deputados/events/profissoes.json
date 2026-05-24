@@ -1,0 +1,8 @@
+{
+  "extractor": "profissoes",
+  "destination": {
+    "type": "local",
+    "path": "/tmp/deputados/profissoes.json"
+  },
+  "run_id": "deputados-profissoes-local"
+}

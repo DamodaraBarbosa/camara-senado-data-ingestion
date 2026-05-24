@@ -19,8 +19,6 @@ class AsyncHistoricoExtractor(CamaraBaseExtractor):
                 for historico in data:
                     historico['deputado_id'] = deputado_id
 
-                print(f'ID: {deputado_id} | Data ID: {data[0].get("deputado_id", None)} | Data length: {len(data)}')
-
                 all_historico.extend(data)
 
         except Exception as e:

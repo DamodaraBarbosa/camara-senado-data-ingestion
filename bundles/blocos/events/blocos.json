@@ -1,0 +1,13 @@
+{
+    "extractor": "blocos",
+    "params": {
+        "init_legislatura": 56,
+        "itens": 100,
+        "request_tries": 4
+    },
+    "destination": {
+        "type": "local",
+        "path": "/tmp/blocos/blocos.json"
+    },
+    "run_id": "blocos-blocos-local"
+}

@@ -1,0 +1,9 @@
+{
+  "extractor": "ids",
+  "params": {},
+  "destination": {
+    "type": "local",
+    "path": "/tmp/orgaos/ids.json"
+  },
+  "run_id": "orgaos-ids-local"
+}

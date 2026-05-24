@@ -1,0 +1,9 @@
+{
+  "extractor": "lideres",
+  "params": {},
+  "destination": {
+    "type": "local",
+    "path": "/tmp/legislaturas/lideres.json"
+  },
+  "run_id": "legislaturas-lideres-local"
+}

@@ -1,0 +1,9 @@
+{
+  "extractor": "ids",
+  "params": {},
+  "destination": {
+    "type": "local",
+    "path": "/tmp/proposicoes/ids.json"
+  },
+  "run_id": "proposicoes-ids-local"
+}

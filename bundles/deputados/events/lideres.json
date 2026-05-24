@@ -1,0 +1,13 @@
+{
+  "extractor": "lideres",
+  "params": {
+    "init_legislatura": 56,
+    "items": 100,
+    "request_tries": 4
+  },
+  "destination": {
+    "type": "local",
+    "path": "/tmp/deputados/lideres.json"
+  },
+  "run_id": "deputados-lideres-local"
+}

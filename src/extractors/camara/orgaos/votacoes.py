@@ -79,14 +79,15 @@ class AsyncOrgaosVotacoesExtractor(CamaraBaseExtractor):
                     [orgao.get('id') for orgao in orgaos if orgao.get('id')]
                 )
             )
+            params = {}
+            if init_legislatura is not None:
+                params['id'] = init_legislatura
             start_legislatura = await self.client.get(
                 session,
                 self.LEGISLATURA_ENDPOINT,
-                params={
-                    'id': init_legislatura,
-                },
+                params=params,
             )
-            start_legislatura_date = start_legislatura['dados'][0].get('dataInicio', None)
+            start_legislatura_date = start_legislatura['dados'][0].get('dataInicio', None) if start_legislatura.get('dados') else None
             start_legislatura_year = int(start_legislatura_date.split('-')[0]) if start_legislatura_date else None
 
             current_year = datetime.now().year
@@ -97,9 +98,9 @@ class AsyncOrgaosVotacoesExtractor(CamaraBaseExtractor):
 
             for orgao_id in orgaos_id:
                 for index, ano in enumerate(years_range):
-                    id_legislatura = init_legislatura + (index // 4)
+                    id_legislatura = init_legislatura + (index // 4) if init_legislatura is not None else None
 
-                    if index % 4 == 0 and id_legislatura == init_legislatura:
+                    if init_legislatura is not None and index % 4 == 0 and id_legislatura == init_legislatura:
                         current_start_date = date(ano, 2, 1)
                     else:
                         current_start_date = date(ano, 1, 1)
