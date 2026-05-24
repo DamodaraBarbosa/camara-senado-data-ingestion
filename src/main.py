@@ -1,6 +1,5 @@
 from clients.camara_client import AsyncCamaraClient
 from extractors.camara.deputados.deputados import AsyncDeputadosExtractor
-from extractors.camara.deputados.discursos import AsyncDiscursosExtractor
 from extractors.camara.deputados.orgaos import AsyncOrgaosExtractor
 import asyncio
 from datetime import datetime
