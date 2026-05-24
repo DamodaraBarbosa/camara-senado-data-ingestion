@@ -136,7 +136,7 @@ def _write_output(
             Key=key,
             Body=content.encode('utf-8'))
 
-    else:
+    elif dest_type == "local":
         out_path = destination.get(
             "path", f"/tmp/deputados/{extractor_name}_{run_id}.json"
         )
@@ -144,6 +144,9 @@ def _write_output(
         with open(out_path, "w", encoding="utf-8") as f:
             f.write(content)
         print(f"Saved {len(data)} records to {out_path}")
+
+    else:
+        raise ValueError(f"Unknown destination type: {dest_type}")
 
 
 if __name__ == "__main__":
