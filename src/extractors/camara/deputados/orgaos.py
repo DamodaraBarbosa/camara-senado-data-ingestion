@@ -52,9 +52,12 @@ class AsyncOrgaosExtractor(CamaraBaseExtractor):
 
                 if not data:
                     empty_count += 1
-                else:
-                    bodies.extend(data)
                     page += 1
+                    continue
+
+                empty_count = 0
+                bodies.extend(data)
+                page += 1
 
             except Exception as e:
                 print(f'Error fetching deputado {deputado_id}: {e}')
