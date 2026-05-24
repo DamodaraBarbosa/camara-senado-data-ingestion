@@ -58,6 +58,7 @@ class AsyncDiscursosExtractor(CamaraBaseExtractor):
 
                 if not data:
                     empty_count += 1
+                    page += 1
                     continue
 
                 for discurso in data:
