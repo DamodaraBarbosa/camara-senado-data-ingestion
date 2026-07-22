@@ -124,27 +124,38 @@ def _write_output(
 
 if __name__ == "__main__":
     import sys
+    import os
     import json
 
-    event_path = sys.argv[1] if len(sys.argv) > 1 else "event.json"
+    event_env = os.getenv("EVENT_PAYLOAD")
     event = {}
-    try:
-        with open(event_path, "r", encoding="utf-8") as f:
-            event = json.load(f)
-    except FileNotFoundError:
-        print(f"[WARNING] Event file '{event_path}' not found. Using default empty event.")
-        # Fallback padrão seguro para testes locais ou produção sem parâmetros
-        event = {
-            "extractor": "partidos",
-            "params": {
-                "init_legislatura": 57
-            },
-            "destination": {
-                "type": "local",
-                "path": "/tmp/partidos/partidos_output.json"
-            },
-            "run_id": "ecs-test"
-        }
+
+    if event_env:
+        try:
+            print("[INFO] Loading event configuration directly from environment variable 'EVENT_PAYLOAD'...")
+            event = json.loads(event_env)
+        except json.JSONDecodeError as e:
+            print(f"[ERROR] Failed to parse EVENT_PAYLOAD as JSON: {e}")
+            sys.exit(1)
+    else:
+        event_path = sys.argv[1] if len(sys.argv) > 1 else "event.json"
+        try:
+            with open(event_path, "r", encoding="utf-8") as f:
+                event = json.load(f)
+        except FileNotFoundError:
+            print(f"[WARNING] Event file '{event_path}' not found. Using default empty event.")
+            # Fallback padrão seguro para testes locais ou produção sem parâmetros
+            event = {
+                "extractor": "partidos",
+                "params": {
+                    "init_legislatura": 57
+                },
+                "destination": {
+                    "type": "local",
+                    "path": "/tmp/partidos/partidos_output.json"
+                },
+                "run_id": "ecs-test"
+            }
 
     result = handler(event)
     print(json.dumps(result, ensure_ascii=False, indent=2))
