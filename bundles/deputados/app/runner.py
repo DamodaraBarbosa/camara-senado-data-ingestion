@@ -153,8 +153,24 @@ if __name__ == "__main__":
     import sys
 
     event_path = sys.argv[1] if len(sys.argv) > 1 else "event.json"
-    with open(event_path, "r", encoding="utf-8") as f:
-        event = json.load(f)
+    event = {}
+    try:
+        with open(event_path, "r", encoding="utf-8") as f:
+            event = json.load(f)
+    except FileNotFoundError:
+        print(f"[WARNING] Event file '{event_path}' not found. Using default empty event.")
+        # Fallback padrão seguro para testes locais ou produção sem parâmetros
+        event = {
+            "extractor": "deputados",
+            "params": {
+                "id_legislatura": 57
+            },
+            "destination": {
+                "type": "local",
+                "path": "/tmp/deputados/deputados_output.json"
+            },
+            "run_id": "ecs-test"
+        }
 
     result = asyncio.run(_run(event))
     print(json.dumps(result, ensure_ascii=False, indent=2))
