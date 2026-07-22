@@ -6,12 +6,12 @@ from airflow.providers.amazon.aws.operators.ecs import EcsRunTaskOperator
 
 
 # Define the path to the configuration file
-CONFIG_FILE_PATH = Path(__file__).resolve().parent / "config.json"
+CONFIG_FILE_PATH = Path(__file__).resolve().parent / "config" / "bundles_config.json"
 
 with open(CONFIG_FILE_PATH, "r", encoding="utf-8") as f:
     config_data = json.load(f)
 
-BUNDLES_CONFIG = config_data.get("bundles", {})
+BUNDLES_CONFIG = config_data.get("bundles_config", {})
 
 # Task default arguments
 DEFAULT_ARGS = {
@@ -93,4 +93,3 @@ with DAG(
             for dep in step.get("depends_on", []):
                 if dep in tasks_pool:
                     tasks_pool[dep] >> ecs_task
-                    
