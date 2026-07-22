@@ -152,13 +152,25 @@ if __name__ == "__main__":
     import sys
     import json
 
-    if len(sys.argv) < 2:
-        print("Usage: python runner.py <path_to_event.json>")
-        sys.exit(1)
-
-    event_path = sys.argv[1]
-    with open(event_path, "r", encoding="utf-8") as f:
-        event = json.load(f)
+    event_path = sys.argv[1] if len(sys.argv) > 1 else "event.json"
+    event = {}
+    try:
+        with open(event_path, "r", encoding="utf-8") as f:
+            event = json.load(f)
+    except FileNotFoundError:
+        print(f"[WARNING] Event file '{event_path}' not found. Using default empty event.")
+        # Fallback padrão seguro para testes locais ou produção sem parâmetros
+        event = {
+            "extractor": "proposicoes",
+            "params": {
+                "init_legislatura": 57
+            },
+            "destination": {
+                "type": "local",
+                "path": "/tmp/proposicoes/proposicoes_output.json"
+            },
+            "run_id": "ecs-test"
+        }
 
     result = handler(event)
     print(json.dumps(result, ensure_ascii=False, indent=2))

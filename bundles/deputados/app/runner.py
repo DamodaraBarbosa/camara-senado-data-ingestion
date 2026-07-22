@@ -163,7 +163,7 @@ if __name__ == "__main__":
         event = {
             "extractor": "deputados",
             "params": {
-                "id_legislatura": 57
+                "init_legislatura": 57
             },
             "destination": {
                 "type": "local",
