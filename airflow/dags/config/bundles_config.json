@@ -1,0 +1,125 @@
+{
+  "bundles_config": {
+    "blocos": {
+      "cluster": "dataplatform-ecs-cluster-dev",
+      "task_definition": "dataplatform-ingestion-task-dev",
+      "sequence": [
+        { "extractor": "blocos", "depends_on": [] },
+        { "extractor": "ids", "depends_on": ["blocos"] },
+        { "extractor": "partidos", "depends_on": ["blocos"] }
+      ]
+    },
+    "deputados": {
+      "cluster": "dataplatform-ecs-cluster-dev",
+      "task_definition": "dataplatform-ingestion-task-dev",
+      "sequence": [
+        { "extractor": "deputados", "depends_on": [] },
+        { "extractor": "mesa", "depends_on": [] },
+        { "extractor": "codigo_situacao", "depends_on": [] },
+        { "extractor": "lideres", "depends_on": [] },
+        { "extractor": "ids", "depends_on": ["deputados"] },
+        { "extractor": "frentes", "depends_on": ["deputados"] },
+        { "extractor": "profissoes", "depends_on": ["deputados"] },
+        { "extractor": "ocupacoes", "depends_on": ["deputados"] },
+        { "extractor": "despesas", "depends_on": ["deputados"] },
+        { "extractor": "orgaos", "depends_on": ["deputados"] }
+      ]
+    },
+    "eventos": {
+      "cluster": "dataplatform-ecs-cluster-dev",
+      "task_definition": "dataplatform-ingestion-task-dev",
+      "sequence": [
+        { "extractor": "eventos", "depends_on": [] },
+        { "extractor": "ids", "depends_on": ["eventos"] },
+        { "extractor": "deputados", "depends_on": ["eventos"] },
+        { "extractor": "orgaos", "depends_on": ["eventos"] },
+        { "extractor": "pauta", "depends_on": ["eventos"] },
+        { "extractor": "votacoes", "depends_on": ["eventos"] }
+      ]
+    },
+    "frentes": {
+      "cluster": "dataplatform-ecs-cluster-dev",
+      "task_definition": "dataplatform-ingestion-task-dev",
+      "sequence": [
+        { "extractor": "frentes", "depends_on": [] },
+        { "extractor": "ids", "depends_on": ["frentes"] },
+        { "extractor": "membros", "depends_on": ["frentes"] }
+      ]
+    },
+    "grupos": {
+      "cluster": "dataplatform-ecs-cluster-dev",
+      "task_definition": "dataplatform-ingestion-task-dev",
+      "sequence": [
+        { "extractor": "grupos", "depends_on": [] },
+        { "extractor": "ids", "depends_on": ["grupos"] },
+        { "extractor": "historico", "depends_on": ["grupos"] },
+        { "extractor": "membros", "depends_on": ["grupos"] }
+      ]
+    },
+    "legislaturas": {
+      "cluster": "dataplatform-ecs-cluster-dev",
+      "task_definition": "dataplatform-ingestion-task-dev",
+      "sequence": [
+        { "extractor": "legislaturas", "depends_on": [] },
+        { "extractor": "ids", "depends_on": ["legislaturas"] },
+        { "extractor": "lideres", "depends_on": ["legislaturas"] },
+        { "extractor": "mesa", "depends_on": ["legislaturas"] }
+      ]
+    },
+    "orgaos": {
+      "cluster": "dataplatform-ecs-cluster-dev",
+      "task_definition": "dataplatform-ingestion-task-dev",
+      "sequence": [
+        { "extractor": "orgaos", "depends_on": [] },
+        { "extractor": "codigo_situacao", "depends_on": [] },
+        { "extractor": "ids", "depends_on": ["orgaos"] },
+        { "extractor": "eventos", "depends_on": ["orgaos"] },
+        { "extractor": "membros", "depends_on": ["orgaos"] },
+        { "extractor": "situacoes_orgao", "depends_on": ["orgaos"] },
+        { "extractor": "votacoes", "depends_on": ["orgaos"] }
+      ]
+    },
+    "partidos": {
+      "cluster": "dataplatform-ecs-cluster-dev",
+      "task_definition": "dataplatform-ingestion-task-dev",
+      "sequence": [
+        { "extractor": "partidos", "depends_on": [] },
+        { "extractor": "ids", "depends_on": ["partidos"] },
+        { "extractor": "lideres", "depends_on": ["partidos"] },
+        { "extractor": "membros", "depends_on": ["partidos"] }
+      ]
+    },
+    "proposicoes": {
+      "cluster": "dataplatform-ecs-cluster-dev",
+      "task_definition": "dataplatform-ingestion-task-dev",
+      "sequence": [
+        { "extractor": "proposicoes", "depends_on": [] },
+        { "extractor": "codigo_situacao", "depends_on": [] },
+        { "extractor": "codigo_tema", "depends_on": [] },
+        { "extractor": "codigo_tipo_autor", "depends_on": [] },
+        { "extractor": "codigo_tipo_tramitacao", "depends_on": [] },
+        { "extractor": "sigla_tipo", "depends_on": [] },
+        { "extractor": "situacoes_proposicao", "depends_on": [] },
+        { "extractor": "temas", "depends_on": [] },
+        { "extractor": "tipos_autor", "depends_on": [] },
+        { "extractor": "tipos_proposicao", "depends_on": [] },
+        { "extractor": "tipos_tramitacao", "depends_on": [] },
+        { "extractor": "ids", "depends_on": ["proposicoes"] },
+        { "extractor": "autores", "depends_on": ["proposicoes"] },
+        { "extractor": "relacionadas", "depends_on": ["proposicoes"] },
+        { "extractor": "tramitacoes", "depends_on": ["proposicoes"] },
+        { "extractor": "votacoes", "depends_on": ["proposicoes"] }
+      ]
+    },
+    "votacoes": {
+      "cluster": "dataplatform-ecs-cluster-dev",
+      "task_definition": "dataplatform-ingestion-task-dev",
+      "sequence": [
+        { "extractor": "votacoes", "depends_on": [] },
+        { "extractor": "ids", "depends_on": ["votacoes"] },
+        { "extractor": "orientacoes", "depends_on": ["votacoes"] },
+        { "extractor": "votos", "depends_on": ["votacoes"] }
+      ]
+    }
+  }
+}
