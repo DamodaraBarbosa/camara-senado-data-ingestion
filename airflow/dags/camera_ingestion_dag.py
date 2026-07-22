@@ -77,8 +77,8 @@ with DAG(
                 # Mapping the network configuration for Fargate
                 network_configuration={
                     "awsvpcConfiguration": {
-                        "subnets": config.get("subnets", []),
-                        "securityGroups": config.get("security_groups", []),
+                        "subnets": ["subnet-084a2fb67517887b4"],
+                        "securityGroups": ["sg-0a2d626cc7f4efafa"],
                         "assignPublicIp": "ENABLED"
                     }
                 },
