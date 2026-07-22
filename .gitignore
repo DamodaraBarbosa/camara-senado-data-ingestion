@@ -4,3 +4,8 @@ __pycache__/
 *.pyc
 .env
 .env.docker
+
+# Airflow logs and dynamic data
+airflow/logs/
+airflow/db/
+airflow/plugins/__pycache__/
