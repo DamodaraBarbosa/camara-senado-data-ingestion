@@ -12,6 +12,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 import asyncio
+import inspect
 import json
 
 from clients.camara_client import AsyncCamaraClient
@@ -99,7 +100,10 @@ async def _run(event: dict):
                 f"[runner] Dependency '{param_name}' resolved: {len(dep_data)} records."
             )
 
-    data = await extractor_cls(client).extract(**resolved_params)
+    # Filter resolved_params to match target extractor signature
+    sig = inspect.signature(extractor_cls.extract)
+    filtered_params = {k: v for k, v in resolved_params.items() if k in sig.parameters or any(p.kind == inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values())}
+    data = await extractor_cls(client).extract(**filtered_params)
 
     _write_output(data, destination, extractor_name, run_id)
 
