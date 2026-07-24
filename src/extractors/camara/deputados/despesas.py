@@ -24,11 +24,11 @@ class AsyncDespesasExtractor(CamaraBaseExtractor):
 
             current_year = datetime.now().year
             start_year = start_legislatura_year if start_legislatura_year is not None else current_year
-            years_range = list(range(start_year, current_year + 1))
+            years_range = range(start_year, current_year + 1)
 
             deputados_ids = list(dict.fromkeys(deputado.get('id') for deputado in deputados if deputado.get('id')))
 
-            print(f'[despesas] Iniciando extração para {len(deputados_ids)} deputados | anos: {years_range}')
+            print(f'[despesas] Iniciando extração para {len(deputados_ids)} deputados | anos: {list(years_range)}')
 
             all_expenses = []
             for batch_start in range(0, len(deputados_ids), batch_size):
@@ -47,19 +47,22 @@ class AsyncDespesasExtractor(CamaraBaseExtractor):
             return all_expenses
 
     async def _fetch_deputado(self, session, deputado_id, years_range, month, items):
-        params = {
-            'ano': years_range,
-            'mes': month,
-        }
-        params = {k: v for k, v in params.items() if v is not None}
+        all_expenses = []
+        for ano in years_range:
+            params = {
+                'ano': ano,
+                'mes': month,
+            }
+            params = {k: v for k, v in params.items() if v is not None}
 
-        expenses = await self.client.get_all_pages(
-            session,
-            self.ENDPOINT.format(id=deputado_id),
-            params=params,
-            itens=items
-        )
-        for despesa in expenses:
-            despesa['deputadoId'] = deputado_id
+            expenses = await self.client.get_all_pages(
+                session,
+                self.ENDPOINT.format(id=deputado_id),
+                params=params,
+                itens=items
+            )
+            for despesa in expenses:
+                despesa['deputadoId'] = deputado_id
+            all_expenses.extend(expenses)
 
-        return expenses
+        return all_expenses

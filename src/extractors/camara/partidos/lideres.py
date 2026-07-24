@@ -34,17 +34,16 @@ class AsyncLideresExtractor(CamaraBaseExtractor):
         async with aiohttp.ClientSession() as session:
             tasks = []
 
-            async with aiohttp.ClientSession() as session:
-                for partido in partidos_ids:
-                    task = self._fetch_pages(
-                        session=session,
-                        id_partido=partido,
-                        itens=itens
-                    )
-                    tasks.append(task)
+            for partido in partidos_ids:
+                task = self._fetch_pages(
+                    session=session,
+                    id_partido=partido,
+                    itens=itens
+                )
+                tasks.append(task)
 
-                results = await asyncio.gather(*tasks)
+            results = await asyncio.gather(*tasks)
 
-                all_lideres = [item for sublist in results if sublist for item in sublist]
+            all_lideres = [item for sublist in results if sublist for item in sublist]
 
-                return all_lideres
+            return all_lideres

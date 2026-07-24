@@ -11,27 +11,26 @@ class AsyncTemasExtractor(CamaraBaseExtractor):
         self,
         proposicoes: json
     ):
-        session = aiohttp.ClientSession()
         proposicoes_ids = list(dict.fromkeys(proposicao.get('id')
                                for proposicao in proposicoes if proposicao.get('id')))
         all_temas = []
 
-        tasks = []
-        for proposicao_id in proposicoes_ids:
-            task = self.client.get(session, self.ENDPOINT.format(id=proposicao_id))
-            tasks.append((proposicao_id, task))
+        async with aiohttp.ClientSession() as session:
+            tasks = []
+            for proposicao_id in proposicoes_ids:
+                task = self.client.get(session, self.ENDPOINT.format(id=proposicao_id))
+                tasks.append((proposicao_id, task))
 
-        try:
-            results = await asyncio.gather(*[task for _, task in tasks])
+            try:
+                results = await asyncio.gather(*[task for _, task in tasks])
 
-            for (proposicao_id, _), data in zip(tasks, results):
-                temas_data = data.get('dados', [])
-                for tema in temas_data:
-                    tema['idProposicao'] = proposicao_id
-                all_temas.extend(temas_data)
+                for (proposicao_id, _), data in zip(tasks, results):
+                    temas_data = data.get('dados', [])
+                    for tema in temas_data:
+                        tema['idProposicao'] = proposicao_id
+                    all_temas.extend(temas_data)
 
-        except Exception as e:
-            print(f'Error while extracting temas: {e}')
+            except Exception as e:
+                print(f'Error while extracting temas: {e}')
 
-        await session.close()
         return all_temas
