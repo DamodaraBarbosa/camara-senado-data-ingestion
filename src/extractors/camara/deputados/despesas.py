@@ -14,7 +14,8 @@ class AsyncDespesasExtractor(CamaraBaseExtractor):
         init_legislatura: int = None,
         month: int = None,
         items: int = 1000,
-        request_tries: int = 4
+        request_tries: int = 4,
+        batch_size: int = 40
     ):
         session = aiohttp.ClientSession()
         legislatura = await self.client.get(session, 'legislaturas', params={'id': init_legislatura})
@@ -29,13 +30,18 @@ class AsyncDespesasExtractor(CamaraBaseExtractor):
 
         print(f'[despesas] Iniciando extração para {len(deputados_ids)} deputados | anos: {years_range}')
 
-        tasks = [
-            self._fetch_deputado(session, deputado_id, years_range, month, items, request_tries)
-            for deputado_id in deputados_ids
-        ]
-        results = await asyncio.gather(*tasks)
+        all_expenses = []
+        for batch_start in range(0, len(deputados_ids), batch_size):
+            batch_ids = deputados_ids[batch_start:batch_start + batch_size]
+            tasks = [
+                self._fetch_deputado(session, deputado_id, years_range, month, items, request_tries)
+                for deputado_id in batch_ids
+            ]
+            batch_results = await asyncio.gather(*tasks)
+            batch_expenses = [despesa for expenses in batch_results for despesa in expenses]
+            all_expenses.extend(batch_expenses)
+            print(f'[despesas] Lote {batch_start // batch_size + 1} concluído: {len(batch_expenses)} despesas')
 
-        all_expenses = [despesa for expenses in results for despesa in expenses]
         print(f'[despesas] Extração concluída | total de despesas: {len(all_expenses)}')
 
         await session.close()
