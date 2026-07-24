@@ -58,6 +58,8 @@ class AsyncDeputadosExtractor(CamaraBaseExtractor):
 
                 except Exception as e:
                     print(f'Error while extracting deputados for legislatura {legislatura}, page {page}: {e}')
+                    empty_count += 1
+                    page += 1
 
         await session.close()
         return all_deputados

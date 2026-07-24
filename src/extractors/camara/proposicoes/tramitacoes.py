@@ -1,5 +1,6 @@
 from extractors.camara.base import CamaraBaseExtractor
 import json
+import asyncio
 import aiohttp
 
 
@@ -14,21 +15,24 @@ class AsyncTramitacoesExtractor(CamaraBaseExtractor):
         session = aiohttp.ClientSession()
         proposicoes_ids = list(dict.fromkeys(proposicao.get('id')
                                for proposicao in proposicoes if proposicao.get('id')))
-        print(proposicoes_ids)
         all_tramitacoes = []
 
+        tasks = []
         for proposicao_id in proposicoes_ids:
-            try:
-                response = await self.client.get(session, self.ENDPOINT.format(id=proposicao_id))
-                data = response.get('dados', [])
+            task = self.client.get(session, self.ENDPOINT.format(id=proposicao_id))
+            tasks.append((proposicao_id, task))
 
-                for tramitacao in data:
+        try:
+            results = await asyncio.gather(*[task for _, task in tasks])
+
+            for (proposicao_id, _), data in zip(tasks, results):
+                tramitacoes_data = data.get('dados', [])
+                for tramitacao in tramitacoes_data:
                     tramitacao['idProposicao'] = proposicao_id
+                all_tramitacoes.extend(tramitacoes_data)
 
-                all_tramitacoes.extend(data)
-
-            except Exception as e:
-                print(f'Error while extracting tramitacoes for proposicao {proposicao_id}: {e}')
+        except Exception as e:
+            print(f'Error while extracting tramitacoes: {e}')
 
         await session.close()
         return all_tramitacoes

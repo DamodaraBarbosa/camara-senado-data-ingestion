@@ -1,5 +1,6 @@
 from extractors.camara.base import CamaraBaseExtractor
 import json
+import asyncio
 import aiohttp
 
 
@@ -12,17 +13,21 @@ class AsyncFrentesExtractor(CamaraBaseExtractor):
         all_frentes = []
 
         try:
+            tasks = []
             for deputado_id in deputados_ids:
-                response = await self.client.get(session, self.ENDPOINT.format(id=deputado_id))
-                data = response.get('dados', [])
+                task = self.client.get(session, self.ENDPOINT.format(id=deputado_id))
+                tasks.append((deputado_id, task))
 
-                for frente in data:
+            results = await asyncio.gather(*[task for _, task in tasks])
+
+            for (deputado_id, _), data in zip(tasks, results):
+                frentes_data = data.get('dados', [])
+                for frente in frentes_data:
                     frente['deputado_id'] = deputado_id
-
-                all_frentes.extend(data)
+                all_frentes.extend(frentes_data)
 
         except Exception as e:
-            print(f'Error while extracting frentes for deputado {deputado_id}: {e}')
+            print(f'Error while extracting frentes: {e}')
 
         await session.close()
         return all_frentes

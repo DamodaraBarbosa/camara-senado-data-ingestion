@@ -192,5 +192,5 @@ if __name__ == "__main__":
                 "run_id": "ecs-test"
             }
 
-    result = asyncio.run(_run(event))
+    result = handler(event)
     print(json.dumps(result, ensure_ascii=False, indent=2))

@@ -1,5 +1,6 @@
 from extractors.camara.base import CamaraBaseExtractor
 import json
+import asyncio
 import aiohttp
 
 
@@ -15,18 +16,22 @@ class AsyncAutoresExtractor(CamaraBaseExtractor):
                                for proposicao in proposicoes if proposicao.get('id')))
         all_autores = []
 
+        tasks = []
         for proposicao_id in proposicoes_ids:
-            try:
-                response = await self.client.get(session, self.ENDPOINT.format(id=proposicao_id))
-                data = response.get('dados', [])
+            task = self.client.get(session, self.ENDPOINT.format(id=proposicao_id))
+            tasks.append((proposicao_id, task))
 
-                for autor in data:
+        try:
+            results = await asyncio.gather(*[task for _, task in tasks])
+
+            for (proposicao_id, _), data in zip(tasks, results):
+                autores_data = data.get('dados', [])
+                for autor in autores_data:
                     autor['idProposicao'] = proposicao_id
+                all_autores.extend(autores_data)
 
-                all_autores.extend(data)
-
-            except Exception as e:
-                print(f'Error while extracting autores for proposicao {proposicao_id}: {e}')
+        except Exception as e:
+            print(f'Error while extracting autores: {e}')
 
         await session.close()
         return all_autores

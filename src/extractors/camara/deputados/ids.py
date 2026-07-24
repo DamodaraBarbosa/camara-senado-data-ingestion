@@ -1,5 +1,6 @@
 from extractors.camara.base import CamaraBaseExtractor
 import json
+import asyncio
 import aiohttp
 
 
@@ -16,9 +17,15 @@ class AsyncIdsExtractor(CamaraBaseExtractor):
             if deputado_id not in deputados_ids:
                 deputados_ids.append(deputado_id)
 
-        for id in deputados_ids:
-            response = await self.client.get(session, f'{self.ENDPOINT}{id}')
-            data = response.get('dados', {})
+        tasks = []
+        for deputado_id in deputados_ids:
+            task = self.client.get(session, f'{self.ENDPOINT}{deputado_id}')
+            tasks.append(task)
+
+        results = await asyncio.gather(*tasks)
+
+        for result in results:
+            data = result.get('dados', {})
             all_ids.append(data)
 
         await session.close()

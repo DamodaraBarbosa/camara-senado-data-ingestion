@@ -1,5 +1,6 @@
 from extractors.camara.base import CamaraBaseExtractor
 import json
+import asyncio
 import aiohttp
 
 
@@ -12,17 +13,21 @@ class AsyncHistoricoExtractor(CamaraBaseExtractor):
         all_historico = []
 
         try:
+            tasks = []
             for deputado_id in deputados_ids:
-                response = await self.client.get(session, self.ENDPOINT.format(id=deputado_id))
-                data = response.get('dados', [])
+                task = self.client.get(session, self.ENDPOINT.format(id=deputado_id))
+                tasks.append((deputado_id, task))
 
-                for historico in data:
+            results = await asyncio.gather(*[task for _, task in tasks])
+
+            for (deputado_id, _), data in zip(tasks, results):
+                historico_data = data.get('dados', [])
+                for historico in historico_data:
                     historico['deputado_id'] = deputado_id
-
-                all_historico.extend(data)
+                all_historico.extend(historico_data)
 
         except Exception as e:
-            print(f'Error while extracting historico for deputado {deputado_id}: {e}')
+            print(f'Error while extracting historico: {e}')
 
         await session.close()
         return all_historico

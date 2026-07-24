@@ -1,5 +1,6 @@
 from extractors.camara.base import CamaraBaseExtractor
 import json
+import asyncio
 import aiohttp
 
 
@@ -15,18 +16,22 @@ class AsyncRelacionadasExtractor(CamaraBaseExtractor):
                                for proposicao in proposicoes if proposicao.get('id')))
         all_relacionadas = []
 
+        tasks = []
         for proposicao_id in proposicoes_ids:
-            try:
-                response = await self.client.get(session, self.ENDPOINT.format(id=proposicao_id))
-                data = response.get('dados', [])
+            task = self.client.get(session, self.ENDPOINT.format(id=proposicao_id))
+            tasks.append((proposicao_id, task))
 
-                for relacionada in data:
+        try:
+            results = await asyncio.gather(*[task for _, task in tasks])
+
+            for (proposicao_id, _), data in zip(tasks, results):
+                relacionadas_data = data.get('dados', [])
+                for relacionada in relacionadas_data:
                     relacionada['relacionadoProposicao'] = proposicao_id
+                all_relacionadas.extend(relacionadas_data)
 
-                all_relacionadas.extend(data)
-
-            except Exception as e:
-                print(f'Error while extracting relacionadas for proposicao {proposicao_id}: {e}')
+        except Exception as e:
+            print(f'Error while extracting relacionadas: {e}')
 
         await session.close()
         return all_relacionadas

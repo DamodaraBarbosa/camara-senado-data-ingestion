@@ -24,7 +24,7 @@ class AsyncCamaraClient:
     @property
     def semaphore(self):
         if self._semaphore is None:
-            self._semaphore = asyncio.Semaphore(5)
+            self._semaphore = asyncio.Semaphore(15)
         return self._semaphore
 
     @retry(

@@ -1,5 +1,6 @@
 from extractors.camara.base import CamaraBaseExtractor
 import json
+import asyncio
 import aiohttp
 
 
@@ -12,17 +13,21 @@ class AsyncMandatosExternosExtractor(CamaraBaseExtractor):
         all_mandatos_externos = []
 
         try:
+            tasks = []
             for deputado_id in deputados_ids:
-                response = await self.client.get(session, self.ENDPOINT.format(id=deputado_id))
-                data = response.get('dados', [])
+                task = self.client.get(session, self.ENDPOINT.format(id=deputado_id))
+                tasks.append((deputado_id, task))
 
-                for mandato in data:
+            results = await asyncio.gather(*[task for _, task in tasks])
+
+            for (deputado_id, _), data in zip(tasks, results):
+                mandatos_data = data.get('dados', [])
+                for mandato in mandatos_data:
                     mandato['deputado_id'] = deputado_id
-
-                all_mandatos_externos.extend(data)
+                all_mandatos_externos.extend(mandatos_data)
 
         except Exception as e:
-            print(f'Error while extracting mandatos externos for deputado {deputado_id}: {e}')
+            print(f'Error while extracting mandatos externos: {e}')
 
         await session.close()
         return all_mandatos_externos
