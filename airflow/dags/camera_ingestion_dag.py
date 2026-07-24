@@ -42,11 +42,13 @@ with DAG(
             task_id = f"run_{bundle_name}_{extractor}"
 
             # Dinamic building of EVENT_PAYLOAD
+            params = {}
+            if config.get("init_legislatura") is not None:
+                params["init_legislatura"] = config["init_legislatura"]
+
             event_payload = {
                 "extractor": extractor,
-                "params": {
-                    "init_legislatura": config.get("init_legislatura", 56)
-                },
+                "params": params,
                 "destination": {
                     "type": "s3",
                     "bucket": "dataplatform-camara-dev-db",
