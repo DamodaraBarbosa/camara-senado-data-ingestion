@@ -77,7 +77,14 @@ with DAG(
                 # Mapping the network configuration for Fargate
                 network_configuration={
                     "awsvpcConfiguration": {
-                        "subnets": ["subnet-084a2fb67517887b4"],
+                        "subnets": [
+                            "subnet-084a2fb67517887b4",
+                            "subnet-0324dd13835617811",
+                            "subnet-0c5f308bb0fe40dc4",
+                            "subnet-09407d2c96c9fa608",
+                            "subnet-0268d990dacda04a3",
+                            "subnet-0481c74a8c7d9a274"
+                        ],
                         "securityGroups": ["sg-0a2d626cc7f4efafa"],
                         "assignPublicIp": "ENABLED"
                     }

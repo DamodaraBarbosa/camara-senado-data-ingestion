@@ -13,12 +13,14 @@ x-airflow-common:
     AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: 'true'
     AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
     AIRFLOW__API__AUTH_BACKENDS: 'airflow.api.auth.backend.basic_auth,airflow.api.auth.backend.session'
-    # Configurações AWS locais de simulação
+    # AWS credentials configuration
     AWS_DEFAULT_REGION: us-east-1
+    AWS_SHARED_CREDENTIALS_FILE: /home/airflow/.aws/credentials
   volumes:
     - ./dags:/opt/airflow/dags
     - ./logs:/opt/airflow/logs
     - ./plugins:/opt/airflow/plugins
+    - ~/.aws/credentials:/home/airflow/.aws/credentials:ro
   user: "${AIRFLOW_UID:-50000}:0"
   depends_on:
     postgres-airflow:
