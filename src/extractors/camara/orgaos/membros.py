@@ -15,48 +15,23 @@ class AsyncMembrosExtractor(CamaraBaseExtractor):
         session,
         id_legislatura,
         current_start_date,
-        request_tries,
         id_orgao,
         itens
     ):
-        base_params = {
-            'itens': itens
+        params = {
+            'dataInicio': current_start_date.isoformat(),
         }
+        params = {k: v for k, v in params.items() if v is not None}
 
-        extracted_data = []
-        page = 1
-        empty_count = 0
-        current_params = {}
-
-        while empty_count < request_tries:
-            try:
-                current_params = base_params.copy()
-                current_params.update({
-                    'dataInicio': current_start_date.isoformat(),
-                    'pagina': page
-                })
-
-                current_params = {k: v for k, v in current_params.items() if v is not None}
-
-                response = await self.client.get(session, self.ENDPOINT.format(id=id_orgao), params=current_params)
-                data = response.get('dados', [])
-
-                if not data:
-                    empty_count += 1
-                    page += 1
-                    continue
-
-                for membro in data:
-                    membro['idLegislatura'] = id_legislatura
-                    membro['idOrgao'] = id_orgao
-
-                extracted_data.extend(data)
-                empty_count = 0
-                page += 1
-
-            except Exception as e:
-                print(f'Error fetching membros from API with params {current_params}. Error: {e}')
-                break
+        extracted_data = await self.client.get_all_pages(
+            session,
+            self.ENDPOINT.format(id=id_orgao),
+            params=params,
+            itens=itens
+        )
+        for membro in extracted_data:
+            membro['idLegislatura'] = id_legislatura
+            membro['idOrgao'] = id_orgao
 
         return extracted_data
 
@@ -108,7 +83,6 @@ class AsyncMembrosExtractor(CamaraBaseExtractor):
                             session=session,
                             id_legislatura=id_legislatura,
                             current_start_date=temp_date,
-                            request_tries=request_tries,
                             id_orgao=orgao_id,
                             itens=itens
                         )
