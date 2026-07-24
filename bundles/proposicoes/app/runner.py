@@ -62,7 +62,17 @@ DEPENDENCIES = {
 
 
 def handler(event: dict, context=None):
-    return asyncio.run(_run(event))
+    """
+    Main handler with timeout protection.
+    Máximo 10 minutos por extração para evitar tasks presas em retry loops.
+    """
+    try:
+        return asyncio.run(
+            asyncio.wait_for(_run(event), timeout=600)  # 10 minutos = 600s
+        )
+    except asyncio.TimeoutError:
+        print("[ERROR] Extração excedeu timeout de 10 minutos. Falhando para retry do Airflow.")
+        raise TimeoutError("Extraction timeout exceeded 10 minutes") from None
 
 
 async def _run(event: dict):
