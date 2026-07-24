@@ -1,4 +1,5 @@
 import sys
+import os
 from pathlib import Path
 
 # Allow running this script directly from the repo root without setting
@@ -94,6 +95,8 @@ async def _run(event: dict):
     client = AsyncCamaraClient()
 
     resolved_params = dict(params)
+    bundle_name = os.getenv("BUNDLE", "proposicoes")
+
     for param_name, dependency in DEPENDENCIES.get(
             extractor_name, {}
         ).items():
@@ -101,6 +104,14 @@ async def _run(event: dict):
             print(
                 f"[runner] Resolving dependency '{param_name}' via '{dependency}'..."
             )
+
+            # Try to load from cache first (S3 or local)
+            cached_data = _read_dependency_output(destination, bundle_name, dependency, run_id)
+            if cached_data is not None:
+                resolved_params[param_name] = cached_data
+                continue
+
+            # Fall back to recomputation
             dep_cls = EXTRACTORS[dependency]
             dep_data = await dep_cls(client).extract(
                 **{k: v for k, v in params.items()
@@ -124,6 +135,44 @@ async def _run(event: dict):
         "status": "success",
         "records": len(data)
     }
+
+
+def _read_dependency_output(destination, bundle_name, dependency_name, run_id):
+    """
+    Try to read dependency output from cache (S3 or local) instead of recomputing.
+    Returns None if not found or error reading; caller falls back to recomputation.
+    """
+    dest_type = destination.get("type", "local")
+
+    try:
+        if dest_type == "s3":
+            import boto3
+            bucket = destination.get("bucket")
+            prefix = destination.get("prefix", "").rstrip("/")
+            key = (
+                f"{prefix}/{dependency_name}_{run_id}.json" if prefix
+                else f"{dependency_name}_{run_id}.json"
+            )
+            s3 = boto3.client("s3")
+            response = s3.get_object(Bucket=bucket, Key=key)
+            content = response['Body'].read().decode("utf-8")
+            data = json.loads(content)
+            print(f"[runner] Loaded dependency '{dependency_name}' from cache: {len(data)} records")
+            return data
+
+        elif dest_type == "local":
+            output_path = Path(destination.get("path", f"/tmp/{bundle_name}/{dependency_name}.json"))
+            if output_path.exists():
+                with open(output_path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                print(f"[runner] Loaded dependency '{dependency_name}' from cache: {len(data)} records")
+                return data
+
+    except Exception as e:
+        print(f"[runner] Could not load dependency '{dependency_name}' from cache: {e}")
+        print(f"[runner] Falling back to recomputation...")
+
+    return None
 
 
 def _write_output(
