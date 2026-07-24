@@ -3,8 +3,17 @@ import aiohttp
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 
 
-_TIMEOUT = aiohttp.ClientTimeout(total=60, connect=10)
+# Configuração otimizada:
+# - total: 90s para cada requisição individual
+# - connect: 30s para estabelecer conexão
+_TIMEOUT = aiohttp.ClientTimeout(total=90, connect=30)
+
+# Status codes que justificam retry
 _RETRYABLE_STATUSES = {429, 500, 502, 503, 504}
+
+# Limite de tempo total para uma operação de extração (evita loops infinitos)
+# Se exceder esse tempo mesmo com retries, a task falha e Airflow faz retry
+_MAX_OPERATION_TIME = 600  # 10 minutos
 
 
 class AsyncCamaraClient:
@@ -19,8 +28,8 @@ class AsyncCamaraClient:
         return self._semaphore
 
     @retry(
-        wait=wait_exponential(multiplier=1, min=2, max=60),
-        stop=stop_after_attempt(7),
+        wait=wait_exponential(multiplier=1, min=2, max=30),
+        stop=stop_after_attempt(4),  # Reduzido de 7 → 4 tentativas (suficiente para erros transitórios)
         retry=retry_if_exception_type((aiohttp.ClientError, asyncio.TimeoutError)),
     )
     async def get(self, session: aiohttp.ClientSession, endpoint: str, params: dict = None):
@@ -36,6 +45,7 @@ class AsyncCamaraClient:
                         wait_time = int(response.headers.get('Retry-After', '30'))
                         print(f'[client] HTTP {response.status} — aguardando {wait_time}s antes de tentar novamente.')
                         await asyncio.sleep(wait_time)
+                        raise aiohttp.ClientError(f"HTTP {response.status}: {response.reason}")
 
                     response.raise_for_status()
 
@@ -46,5 +56,5 @@ class AsyncCamaraClient:
                     return await response.json()
 
                 except Exception as e:
-                    print(f'Error: {e}')
+                    print(f'[client] Error: {e}')
                     raise
