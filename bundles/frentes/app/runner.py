@@ -100,7 +100,7 @@ def _write_output(
         run_id: str
     ):
     dest_type = destination.get("type", "local")
-    content = json.dumps(data, ensure_ascii=False, indent=2)
+    content = json.dumps(data, ensure_ascii=False)
 
     if dest_type == "s3":
         import boto3
@@ -155,9 +155,7 @@ if __name__ == "__main__":
             # Fallback padrão seguro para testes locais ou produção sem parâmetros
             event = {
                 "extractor": "frentes",
-                "params": {
-                    "init_legislatura": 57
-                },
+                "params": {},
                 "destination": {
                     "type": "local",
                     "path": "/tmp/frentes/frentes_output.json"

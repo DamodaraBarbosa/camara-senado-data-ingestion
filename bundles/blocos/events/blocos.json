@@ -1,7 +1,7 @@
 {
     "extractor": "blocos",
     "params": {
-        "init_legislatura": 56,
+        "init_legislatura": null,
         "itens": 100,
         "request_tries": 4
     },

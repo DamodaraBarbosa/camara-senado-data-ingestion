@@ -2,7 +2,7 @@
   "extractor": "proposicoes",
   "params": {
     "autor": null,
-    "init_legislatura": 56,
+    "init_legislatura": null,
     "sigla_partido_autor": null,
     "sigla_uf_autor": null,
     "tramitacao_senado": null,

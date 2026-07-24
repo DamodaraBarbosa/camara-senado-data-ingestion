@@ -1,7 +1,7 @@
 {
   "extractor": "mesa",
   "params": {
-    "init_legislatura": 56
+    "init_legislatura": null
   },
   "destination": {
     "type": "local",

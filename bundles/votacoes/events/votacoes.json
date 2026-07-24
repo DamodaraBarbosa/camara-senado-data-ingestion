@@ -1,7 +1,7 @@
 {
   "extractor": "votacoes",
   "params": {
-    "init_legislatura": 56,
+    "init_legislatura": null,
     "id_proposicao": null,
     "id_evento": null,
     "id_orgao": null,

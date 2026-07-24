@@ -166,9 +166,7 @@ if __name__ == "__main__":
             # Fallback padrão seguro para testes locais ou produção sem parâmetros
             event = {
                 "extractor": "orgaos",
-                "params": {
-                    "init_legislatura": 57
-                },
+                "params": {},
                 "destination": {
                     "type": "local",
                     "path": "/tmp/orgaos/orgaos_output.json"
