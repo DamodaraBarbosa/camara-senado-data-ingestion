@@ -43,6 +43,36 @@ DEPENDENCIES = {
 }
 
 
+def _read_dependency_output(destination: dict, bundle_name: str, dependency_name: str, run_id: str):
+    """Try to read a dependency's cached output from S3 or local filesystem."""
+    try:
+        dest_type = destination.get("type", "local")
+
+        if dest_type == "s3":
+            bucket = destination.get("bucket")
+            prefix = destination.get("prefix", "").rstrip("/")
+            key = (
+                f"{prefix}/{dependency_name}_{run_id}.json" if prefix
+                else f"{dependency_name}_{run_id}.json"
+            )
+
+            s3_client = boto3.client("s3")
+            response = s3_client.get_object(Bucket=bucket, Key=key)
+            content = response["Body"].read().decode("utf-8")
+            return json.loads(content)
+
+        else:  # local
+            out_path = destination.get(
+                "path", f"/tmp/{bundle_name}/{dependency_name}_{run_id}.json"
+            )
+            with open(out_path, "r", encoding="utf-8") as f:
+                return json.load(f)
+
+    except Exception as e:
+        print(f"[cache] Failed to read {dependency_name} from cache: {e}")
+        return None
+
+
 def handler(event: dict, context=None):
     """Main handler with timeout protection (10 min max per extraction)."""
     try:
@@ -70,6 +100,7 @@ async def _run(event: dict):
         )
     
     client = AsyncCamaraClient()
+    bundle_name = os.getenv("BUNDLE", "orgaos")
 
     resolved_params = dict(params)
     for param_name, dependency in DEPENDENCIES.get(
@@ -79,6 +110,14 @@ async def _run(event: dict):
             print(
                 f"[runner] Resolving dependency '{param_name}' via '{dependency}'..."
             )
+
+            # Try to load from cache first (S3 or local)
+            cached_data = _read_dependency_output(destination, bundle_name, dependency, run_id)
+            if cached_data is not None:
+                resolved_params[param_name] = cached_data
+                continue
+
+            # Fall back to recomputation
             dep_cls = EXTRACTORS[dependency]
             dep_data = await dep_cls(client).extract(
                 **{k: v for k, v in params.items()
