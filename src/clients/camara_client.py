@@ -1,5 +1,6 @@
 import asyncio
 import aiohttp
+from urllib.parse import urlparse, parse_qs
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 
 
@@ -58,3 +59,57 @@ class AsyncCamaraClient:
                 except Exception as e:
                     print(f'[client] Error: {e}')
                     raise
+
+    async def get_all_pages(self, session: aiohttp.ClientSession, endpoint: str, params: dict = None, itens: int = 100):
+        """
+        Fetch all pages of a paginated endpoint in parallel using links metadata.
+
+        Args:
+            session: aiohttp ClientSession
+            endpoint: API endpoint (e.g., 'deputados')
+            params: Query parameters (optional)
+            itens: Items per page (default 100)
+
+        Returns:
+            Combined list of all records from all pages
+        """
+        # Start with page 1 to discover total pages
+        page1_params = {**(params or {}), 'itens': itens, 'pagina': 1}
+        page1_params = {k: v for k, v in page1_params.items() if v is not None}
+
+        page1_response = await self.get(session, endpoint, params=page1_params)
+        all_data = page1_response.get('dados', [])
+
+        # Extract total pages from links metadata
+        links = page1_response.get('links', [])
+        last_page = 1
+
+        for link in links:
+            if link.get('rel') == 'last':
+                href = link.get('href', '')
+                # Parse the href to extract pagina param
+                parsed = urlparse(href)
+                query_params = parse_qs(parsed.query)
+                if 'pagina' in query_params:
+                    try:
+                        last_page = int(query_params['pagina'][0])
+                    except (ValueError, IndexError):
+                        pass
+                break
+
+        # If there are more pages, fetch them in parallel
+        if last_page > 1:
+            tasks = []
+            for page_num in range(2, last_page + 1):
+                page_params = {**(params or {}), 'itens': itens, 'pagina': page_num}
+                page_params = {k: v for k, v in page_params.items() if v is not None}
+                task = self.get(session, endpoint, params=page_params)
+                tasks.append(task)
+
+            results = await asyncio.gather(*tasks)
+
+            for result in results:
+                page_data = result.get('dados', [])
+                all_data.extend(page_data)
+
+        return all_data
