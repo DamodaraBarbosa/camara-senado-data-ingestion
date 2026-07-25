@@ -11,7 +11,6 @@ class AsyncProposicoesExtractor(CamaraBaseExtractor):
     ENDPOINT = 'proposicoes'
     LEGISLATURA = 'legislaturas'
     REQUEST_TIMEOUT = 30  # seconds
-    MAX_CONSECUTIVE_EMPTY_PAGES = 4
 
     async def extract(
         self,
@@ -21,12 +20,12 @@ class AsyncProposicoesExtractor(CamaraBaseExtractor):
         sigla_uf_autor: list = None,
         tramitacao_senado: bool = None,
         itens: int = 100,
-        max_consecutive_empty_pages: int = None,
-        start_year: int = None
+        start_year: int = None,
+        request_tries: int = None
     ):
         """
         Extract propositions from Câmara API with optimized parallel requests.
-        
+
         Args:
             autor: Author filter
             init_legislatura: Initial legislature ID (for fetching start year)
@@ -34,13 +33,11 @@ class AsyncProposicoesExtractor(CamaraBaseExtractor):
             sigla_uf_autor: State sigla filter(s)
             tramitacao_senado: Senate processing filter
             itens: Items per page (default 100)
-            max_consecutive_empty_pages: Max consecutive empty pages before stopping (default 4)
             start_year: Override start year (useful if legislature is already cached)
-            
+
         Returns:
             List of propositions
         """
-        max_consecutive_empty_pages = max_consecutive_empty_pages or self.MAX_CONSECUTIVE_EMPTY_PAGES
         
         timeout = aiohttp.ClientTimeout(total=self.REQUEST_TIMEOUT)
         
@@ -63,8 +60,7 @@ class AsyncProposicoesExtractor(CamaraBaseExtractor):
                     sigla_partido_autor,
                     sigla_uf_autor,
                     tramitacao_senado,
-                    itens,
-                    max_consecutive_empty_pages
+                    itens
                 )
                 for ano in years_range
             ]
@@ -127,66 +123,34 @@ class AsyncProposicoesExtractor(CamaraBaseExtractor):
         sigla_partido_autor: list,
         sigla_uf_autor: list,
         tramitacao_senado: bool,
-        itens: int,
-        max_consecutive_empty_pages: int
+        itens: int
     ) -> list:
         """
-        Extract all propositions for a specific year with pagination.
-        
+        Extract all propositions for a specific year using parallel page fetching.
+
         Args:
             session: aiohttp session
             year: Year to extract
             Other args: filter parameters
-            max_consecutive_empty_pages: Stop after N empty pages
-            
+
         Returns:
             List of propositions for the year
         """
-        year_data = []
-        page = 1
-        consecutive_empty_pages = 0
-        
-        logger.debug(f'Starting extraction for year {year}')
-        
-        while consecutive_empty_pages < max_consecutive_empty_pages:
-            try:
-                params = {
-                    'autor': autor,
-                    'ano': year,
-                    'siglaPartidoAutor': sigla_partido_autor,
-                    'siglaUfAutor': sigla_uf_autor,
-                    'tramitacaoSenado': tramitacao_senado,
-                    'itens': itens,
-                    'pagina': page
-                }
-                
-                # Remove None values
-                params = {k: v for k, v in params.items() if v is not None}
-                
-                response = await self.client.get(session, self.ENDPOINT, params=params)
-                data = response.get('dados', [])
-                
-                logger.debug(f'Year {year}, page {page}: {len(data)} propositions')
-                
-                if not data:
-                    consecutive_empty_pages += 1
-                    page += 1
-                    continue
+        params = {
+            'autor': autor,
+            'ano': year,
+            'siglaPartidoAutor': sigla_partido_autor,
+            'siglaUfAutor': sigla_uf_autor,
+            'tramitacaoSenado': tramitacao_senado,
+        }
 
-                print(f'Year {year}, page {page}: {len(data)} propositions')  # Progress indicator
-                
-                consecutive_empty_pages = 0  # Reset counter on successful fetch
-                year_data.extend(data)
-                page += 1
-                
-            except asyncio.TimeoutError:
-                logger.error(f'Timeout extracting year {year}, page {page}')
-                consecutive_empty_pages += 1
-                page += 1
-            except Exception as e:
-                logger.error(f'Error extracting year {year}, page {page}: {e}')
-                consecutive_empty_pages += 1
-                page += 1
-        
-        logger.info(f'Year {year} complete: {len(year_data)} propositions')
-        return year_data
+        # Remove None values
+        params = {k: v for k, v in params.items() if v is not None}
+
+        try:
+            year_data = await self.client.get_all_pages(session, self.ENDPOINT, params=params, itens=itens)
+            logger.info(f'Year {year} complete: {len(year_data)} propositions')
+            return year_data
+        except Exception as e:
+            logger.error(f'Error extracting year {year}: {e}')
+            return []

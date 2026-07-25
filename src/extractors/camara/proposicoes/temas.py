@@ -9,28 +9,32 @@ class AsyncTemasExtractor(CamaraBaseExtractor):
 
     async def extract(
         self,
-        proposicoes: json
+        proposicoes: json,
+        batch_size: int = 100
     ):
         proposicoes_ids = list(dict.fromkeys(proposicao.get('id')
                                for proposicao in proposicoes if proposicao.get('id')))
         all_temas = []
 
         async with aiohttp.ClientSession() as session:
-            tasks = []
-            for proposicao_id in proposicoes_ids:
-                task = self.client.get(session, self.ENDPOINT.format(id=proposicao_id))
-                tasks.append((proposicao_id, task))
+            for batch_start in range(0, len(proposicoes_ids), batch_size):
+                batch_ids = proposicoes_ids[batch_start:batch_start + batch_size]
+                tasks = [
+                    self.client.get(session, self.ENDPOINT.format(id=proposicao_id))
+                    for proposicao_id in batch_ids
+                ]
 
-            try:
-                results = await asyncio.gather(*[task for _, task in tasks])
+                results = await asyncio.gather(*tasks, return_exceptions=True)
 
-                for (proposicao_id, _), data in zip(tasks, results):
-                    temas_data = data.get('dados', [])
+                for proposicao_id, result in zip(batch_ids, results):
+                    if isinstance(result, Exception):
+                        print(f'Error while extracting temas for proposicao {proposicao_id}: {result}')
+                        continue
+                    temas_data = result.get('dados', [])
                     for tema in temas_data:
                         tema['idProposicao'] = proposicao_id
                     all_temas.extend(temas_data)
 
-            except Exception as e:
-                print(f'Error while extracting temas: {e}')
+                print(f'[temas] Lote {batch_start // batch_size + 1} concluído: {len(all_temas)} records')
 
         return all_temas

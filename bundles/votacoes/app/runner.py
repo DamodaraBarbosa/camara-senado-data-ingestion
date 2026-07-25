@@ -1,4 +1,5 @@
 import sys
+import os
 from pathlib import Path
 
 # Allow running this script directly from the repo root without setting
@@ -14,6 +15,7 @@ if str(ROOT) not in sys.path:
 import asyncio
 import inspect
 import json
+import boto3
 
 from clients.camara_client import AsyncCamaraClient
 from extractors.camara.votacoes.votacoes import AsyncVotacoesExtractor
@@ -42,11 +44,8 @@ def _read_dependency_output(destination: dict, bundle_name: str, dependency_name
 
         if dest_type == "s3":
             bucket = destination.get("bucket")
-            prefix = destination.get("prefix", "").rstrip("/")
-            key = (
-                f"{prefix}/{dependency_name}_{run_id}.json" if prefix
-                else f"{dependency_name}_{run_id}.json"
-            )
+            # Always use bundle_name + dependency_name for path, never depend on current extractor's prefix
+            key = f"raw/{bundle_name}/{dependency_name}/{dependency_name}_{run_id}.json"
 
             s3_client = boto3.client("s3")
             response = s3_client.get_object(Bucket=bucket, Key=key)
@@ -54,9 +53,8 @@ def _read_dependency_output(destination: dict, bundle_name: str, dependency_name
             return json.loads(content)
 
         else:  # local
-            out_path = destination.get(
-                "path", f"/tmp/{bundle_name}/{dependency_name}_{run_id}.json"
-            )
+            # Always use bundle_name + dependency_name for path, never depend on current extractor's destination
+            out_path = f"/tmp/{bundle_name}/{dependency_name}.json"
             with open(out_path, "r", encoding="utf-8") as f:
                 return json.load(f)
 

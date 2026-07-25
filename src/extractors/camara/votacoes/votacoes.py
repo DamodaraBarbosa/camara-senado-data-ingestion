@@ -52,8 +52,16 @@ class AsyncVotacoesExtractor(CamaraBaseExtractor):
             if init_legislatura is not None:
                 params['id'] = init_legislatura
             legilslatura = await self.client.get(session, self.LEGISLATURA, params=params)
-            start_legislatura_date = legilslatura['dados'][0].get('dataInicio', None) if legilslatura.get('dados') else None
-            start_legislatura_year = int(start_legislatura_date.split('-')[0]) if start_legislatura_date else None
+
+            if not legilslatura.get('dados'):
+                start_legislatura_year = None
+            else:
+                # Get most recent legislature (max id) for deterministic behavior
+                legislaturas = legilslatura['dados']
+                current_legislatura = max((l['id'] for l in legislaturas), default=None)
+                current_leg_data = next((l for l in legislaturas if l['id'] == current_legislatura), None)
+                start_legislatura_date = current_leg_data.get('dataInicio', None) if current_leg_data else None
+                start_legislatura_year = int(start_legislatura_date.split('-')[0]) if start_legislatura_date else None
 
             current_year = datetime.now().year
             start_year = start_legislatura_year if start_legislatura_year else current_year

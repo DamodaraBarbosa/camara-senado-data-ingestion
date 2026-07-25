@@ -10,28 +10,31 @@ class AsyncVotacoesExtractor(CamaraBaseExtractor):
     async def extract(
         self,
         proposicoes: json,
+        batch_size: int = 100
     ):
-        session = aiohttp.ClientSession()
         proposicoes_ids = list(dict.fromkeys(proposicao.get('id')
                                for proposicao in proposicoes if proposicao.get('id')))
         all_votacoes = []
 
-        tasks = []
-        for proposicao_id in proposicoes_ids:
-            task = self.client.get(session, self.ENDPOINT.format(id=proposicao_id))
-            tasks.append((proposicao_id, task))
+        async with aiohttp.ClientSession() as session:
+            for batch_start in range(0, len(proposicoes_ids), batch_size):
+                batch_ids = proposicoes_ids[batch_start:batch_start + batch_size]
+                tasks = [
+                    self.client.get(session, self.ENDPOINT.format(id=proposicao_id))
+                    for proposicao_id in batch_ids
+                ]
 
-        try:
-            results = await asyncio.gather(*[task for _, task in tasks])
+                results = await asyncio.gather(*tasks, return_exceptions=True)
 
-            for (proposicao_id, _), data in zip(tasks, results):
-                votacoes_data = data.get('dados', [])
-                for votacao in votacoes_data:
-                    votacao['idProposicao'] = proposicao_id
-                all_votacoes.extend(votacoes_data)
+                for proposicao_id, result in zip(batch_ids, results):
+                    if isinstance(result, Exception):
+                        print(f'Error while extracting votacoes for proposicao {proposicao_id}: {result}')
+                        continue
+                    votacoes_data = result.get('dados', [])
+                    for votacao in votacoes_data:
+                        votacao['idProposicao'] = proposicao_id
+                    all_votacoes.extend(votacoes_data)
 
-        except Exception as e:
-            print(f'Error while extracting votacoes: {e}')
+                print(f'[votacoes] Lote {batch_start // batch_size + 1} concluído: {len(all_votacoes)} records')
 
-        await session.close()
         return all_votacoes
