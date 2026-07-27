@@ -25,12 +25,12 @@ class AsyncCamaraClient:
     @property
     def semaphore(self):
         if self._semaphore is None:
-            self._semaphore = asyncio.Semaphore(15)
+            self._semaphore = asyncio.Semaphore(5)
         return self._semaphore
 
     @retry(
         wait=wait_exponential(multiplier=1, min=2, max=30),
-        stop=stop_after_attempt(4),  # Reduzido de 7 → 4 tentativas (suficiente para erros transitórios)
+        stop=stop_after_attempt(3),
         retry=retry_if_exception_type((aiohttp.ClientError, asyncio.TimeoutError)),
     )
     async def get(self, session: aiohttp.ClientSession, endpoint: str, params: dict = None):
@@ -41,24 +41,22 @@ class AsyncCamaraClient:
 
         async with self.semaphore:
             async with session.get(url, params=params, timeout=_TIMEOUT) as response:
-                try:
-                    if response.status in _RETRYABLE_STATUSES:
-                        wait_time = int(response.headers.get('Retry-After', '30'))
-                        print(f'[client] HTTP {response.status} — aguardando {wait_time}s antes de tentar novamente.')
-                        await asyncio.sleep(wait_time)
-                        raise aiohttp.ClientError(f"HTTP {response.status}: {response.reason}")
+                if response.status == 404:
+                    return {}
 
-                    response.raise_for_status()
+                if response.status in _RETRYABLE_STATUSES:
+                    wait_time = int(response.headers.get('Retry-After', '30'))
+                    print(f'[client] HTTP {response.status} — aguardando {wait_time}s antes de tentar novamente.')
+                    await asyncio.sleep(wait_time)
+                    raise aiohttp.ClientError(f"HTTP {response.status}: {response.reason}")
 
-                    text = await response.text()
-                    if not text:
-                        return {}
+                response.raise_for_status()
 
-                    return await response.json()
+                text = await response.text()
+                if not text:
+                    return {}
 
-                except Exception as e:
-                    print(f'[client] Error: {e}')
-                    raise
+                return await response.json()
 
     async def get_all_pages(self, session: aiohttp.ClientSession, endpoint: str, params: dict = None, itens: int = 100):
         """
