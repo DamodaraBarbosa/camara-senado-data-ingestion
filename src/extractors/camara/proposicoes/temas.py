@@ -10,7 +10,7 @@ class AsyncTemasExtractor(CamaraBaseExtractor):
     async def extract(
         self,
         proposicoes: json,
-        batch_size: int = 200
+        batch_size: int = 100
     ):
         proposicoes_ids = list(dict.fromkeys(proposicao.get('id')
                                for proposicao in proposicoes if proposicao.get('id')))

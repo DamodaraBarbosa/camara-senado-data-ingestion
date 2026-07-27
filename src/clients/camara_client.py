@@ -25,7 +25,7 @@ class AsyncCamaraClient:
     @property
     def semaphore(self):
         if self._semaphore is None:
-            self._semaphore = asyncio.Semaphore(5)
+            self._semaphore = asyncio.Semaphore(15)
         return self._semaphore
 
     @retry(
@@ -45,9 +45,7 @@ class AsyncCamaraClient:
                     return {}
 
                 if response.status in _RETRYABLE_STATUSES:
-                    wait_time = int(response.headers.get('Retry-After', '30'))
-                    print(f'[client] HTTP {response.status} — aguardando {wait_time}s antes de tentar novamente.')
-                    await asyncio.sleep(wait_time)
+                    print(f'[client] HTTP {response.status} — retry decorator will handle exponential backoff.')
                     raise aiohttp.ClientError(f"HTTP {response.status}: {response.reason}")
 
                 response.raise_for_status()
