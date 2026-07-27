@@ -100,15 +100,10 @@
         { "extractor": "codigo_tipo_tramitacao", "depends_on": [] },
         { "extractor": "sigla_tipo", "depends_on": [] },
         { "extractor": "situacoes_proposicao", "depends_on": [] },
-        { "extractor": "temas", "depends_on": [] },
         { "extractor": "tipos_autor", "depends_on": [] },
         { "extractor": "tipos_proposicao", "depends_on": [] },
         { "extractor": "tipos_tramitacao", "depends_on": [] },
-        { "extractor": "ids", "depends_on": ["proposicoes"] },
-        { "extractor": "autores", "depends_on": ["proposicoes"] },
-        { "extractor": "relacionadas", "depends_on": ["proposicoes"] },
-        { "extractor": "tramitacoes", "depends_on": ["proposicoes"] },
-        { "extractor": "votacoes", "depends_on": ["proposicoes"] }
+        { "extractor": "ids", "depends_on": ["proposicoes"] }
       ]
     },
     "votacoes": {

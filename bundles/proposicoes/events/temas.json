@@ -1,9 +1,0 @@
-{
-  "extractor": "temas",
-  "params": {},
-  "destination": {
-    "type": "local",
-    "path": "/tmp/proposicoes/temas.json"
-  },
-  "run_id": "proposicoes-temas-local"
-}

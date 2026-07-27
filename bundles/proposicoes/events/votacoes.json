@@ -1,9 +1,0 @@
-{
-  "extractor": "votacoes",
-  "params": {},
-  "destination": {
-    "type": "local",
-    "path": "/tmp/proposicoes/votacoes.json"
-  },
-  "run_id": "proposicoes-votacoes-local"
-}

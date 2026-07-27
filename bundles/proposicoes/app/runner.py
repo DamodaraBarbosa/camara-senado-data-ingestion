@@ -19,47 +19,32 @@ import json
 from clients.camara_client import AsyncCamaraClient
 from extractors.camara.proposicoes.proposicoes import AsyncProposicoesExtractor
 from extractors.camara.proposicoes.ids import AsyncIdsExtractor
-from extractors.camara.proposicoes.autores import AsyncAutoresExtractor
 from extractors.camara.proposicoes.codigo_situacao import AsyncCodigoSituacaoExtractor
 from extractors.camara.proposicoes.codigo_tema import AsyncCodigoTemaExtractor
 from extractors.camara.proposicoes.codigo_tipo_autor import AsyncCodigoTipoAutorExtractor
 from extractors.camara.proposicoes.codigo_tipo_tramitacao import AsyncCodigoTipoTramitacaoExtractor
-from extractors.camara.proposicoes.relacionadas import AsyncRelacionadasExtractor
 from extractors.camara.proposicoes.sigla_tipo import AsyncSiglaTipoExtractor
 from extractors.camara.proposicoes.situacoes_proposicao import AsyncSituacoesProposicaoExtractor
-from extractors.camara.proposicoes.temas import AsyncTemasExtractor
 from extractors.camara.proposicoes.tipos_autor import AsyncTiposAutorExtractor
 from extractors.camara.proposicoes.tipos_proposicao import AsyncTiposProposicaoExtractor
 from extractors.camara.proposicoes.tipos_tramitacao import AsyncTiposTramitacaoExtractor
-from extractors.camara.proposicoes.tramitacoes import AsyncTramitacoesExtractor
-from extractors.camara.proposicoes.votacoes import AsyncVotacoesExtractor
 
 EXTRACTORS = {
     "proposicoes": AsyncProposicoesExtractor,
     "ids": AsyncIdsExtractor,
-    "autores": AsyncAutoresExtractor,
     "codigo_situacao": AsyncCodigoSituacaoExtractor,
     "codigo_tema": AsyncCodigoTemaExtractor,
     "codigo_tipo_autor": AsyncCodigoTipoAutorExtractor,
     "codigo_tipo_tramitacao": AsyncCodigoTipoTramitacaoExtractor,
-    "relacionadas": AsyncRelacionadasExtractor,
     "sigla_tipo": AsyncSiglaTipoExtractor,
     "situacoes_proposicao": AsyncSituacoesProposicaoExtractor,
-    "temas": AsyncTemasExtractor,
     "tipos_autor": AsyncTiposAutorExtractor,
     "tipos_proposicao": AsyncTiposProposicaoExtractor,
     "tipos_tramitacao": AsyncTiposTramitacaoExtractor,
-    "tramitacoes": AsyncTramitacoesExtractor,
-    "votacoes": AsyncVotacoesExtractor,
 }
 
 DEPENDENCIES = {
     "ids":         {"proposicoes": "proposicoes"},
-    "autores":     {"proposicoes": "proposicoes"},
-    "relacionadas": {"proposicoes": "proposicoes"},
-    "tramitacoes": {"proposicoes": "proposicoes"},
-    "votacoes":    {"proposicoes": "proposicoes"},
-    "temas":       {"proposicoes": "proposicoes"},
 }
 
 

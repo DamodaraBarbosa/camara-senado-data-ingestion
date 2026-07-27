@@ -24,15 +24,10 @@ EXECUTION_ORDER = [
     "codigo_tipo_tramitacao",
     "sigla_tipo",
     "situacoes_proposicao",
-    "temas",
     "tipos_autor",
     "tipos_proposicao",
     "tipos_tramitacao",
-    "ids",
-    "autores",
-    "relacionadas",
-    "tramitacoes",
-    "votacoes"
+    "ids"
 ]
 
 
