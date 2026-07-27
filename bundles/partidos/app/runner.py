@@ -41,6 +41,7 @@ def _read_dependency_output(destination: dict, bundle_name: str, dependency_name
         dest_type = destination.get("type", "local")
 
         if dest_type == "s3":
+            import boto3
             bucket = destination.get("bucket")
             prefix = destination.get("prefix", "").rstrip("/")
             key = (

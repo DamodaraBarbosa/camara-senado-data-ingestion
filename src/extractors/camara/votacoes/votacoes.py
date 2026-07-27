@@ -1,6 +1,7 @@
 from extractors.camara.base import CamaraBaseExtractor
 import asyncio
 import aiohttp
+import time
 from datetime import datetime, date
 from utils.utils import add_months
 
@@ -45,8 +46,13 @@ class AsyncVotacoesExtractor(CamaraBaseExtractor):
         id_evento: list = None,
         id_orgao: list = None,
         itens: int = 100,
-        request_tries: int = 4
+        request_tries: int = 4,
+        batch_size: int = 50
     ):
+        self.partial = False
+        start_time = time.monotonic()
+        budget_seconds = 540  # 540s de 600s do handler, margem de 60s
+
         async with aiohttp.ClientSession() as session:
             params = {}
             if init_legislatura is not None:
@@ -67,7 +73,8 @@ class AsyncVotacoesExtractor(CamaraBaseExtractor):
             start_year = start_legislatura_year if start_legislatura_year else current_year
             years_range = range(start_year, current_year + 1)
 
-            tasks = []
+            # Build list of periods to fetch
+            period_specs = []
 
             for index, ano in enumerate(years_range):
                 id_legislatura = init_legislatura + (index // 4) if init_legislatura is not None else None
@@ -82,23 +89,51 @@ class AsyncVotacoesExtractor(CamaraBaseExtractor):
 
                 temp_date = current_start_date
                 while temp_date.year == ano:
-                    task = self._fetch_period_pages(
-                        session=session,
-                        id_legislatura=id_legislatura,
-                        current_start_date=temp_date,
-                        id_proposicao=id_proposicao,
-                        id_evento=id_evento,
-                        id_orgao=id_orgao,
-                        itens=itens
-                    )
-                    tasks.append(task)
+                    period_specs.append({
+                        'id_legislatura': id_legislatura,
+                        'current_start_date': temp_date,
+                    })
 
                     temp_date = add_months(temp_date, 3)
                     if temp_date > date.today():
                         break
 
-            results = await asyncio.gather(*tasks)
+            all_votacoes = []
+            total_periods = len(period_specs)
 
-            all_votacoes = [item for sublist in results if sublist for item in sublist]
+            # Process em lotes com orçamento de tempo
+            for batch_start in range(0, total_periods, batch_size):
+                # Checar orçamento antes de disparar novo lote
+                elapsed = time.monotonic() - start_time
+                if elapsed >= budget_seconds:
+                    print(f'[votacoes] Orçamento de tempo esgotado ({elapsed:.0f}s >= {budget_seconds}s), retornando dados parciais: {batch_start}/{total_periods} períodos')
+                    self.partial = True
+                    break
+
+                batch_specs = period_specs[batch_start:batch_start + batch_size]
+                tasks = [
+                    self._fetch_period_pages(
+                        session=session,
+                        id_legislatura=spec['id_legislatura'],
+                        current_start_date=spec['current_start_date'],
+                        id_proposicao=id_proposicao,
+                        id_evento=id_evento,
+                        id_orgao=id_orgao,
+                        itens=itens
+                    )
+                    for spec in batch_specs
+                ]
+
+                results = await asyncio.gather(*tasks, return_exceptions=True)
+
+                for spec, result in zip(batch_specs, results):
+                    if isinstance(result, Exception):
+                        print(f'[votacoes] Período {spec["current_start_date"]} falhou: {result}')
+                        continue
+
+                    all_votacoes.extend(result)
+
+                batch_num = batch_start // batch_size + 1
+                print(f'[votacoes] Lote {batch_num} concluído: {len(all_votacoes)} registros')
 
             return all_votacoes

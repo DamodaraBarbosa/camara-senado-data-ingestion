@@ -1,4 +1,5 @@
 from extractors.camara.base import CamaraBaseExtractor
+import asyncio
 import json
 import aiohttp
 

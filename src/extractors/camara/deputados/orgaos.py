@@ -14,8 +14,11 @@ class AsyncOrgaosExtractor(CamaraBaseExtractor):
         request_tries: int = 4
     ):
         async with aiohttp.ClientSession() as session:
-            legislatura = await self.client.get(session, 'legislaturas', params={'id': init_legislatura})
-            start_legislatura_date = legislatura['dados'][0].get('dataInicio', None)
+            params = {}
+            if init_legislatura is not None:
+                params['id'] = init_legislatura
+            legislatura = await self.client.get(session, 'legislaturas', params=params)
+            start_legislatura_date = legislatura['dados'][0].get('dataInicio', None) if legislatura.get('dados') else None
 
             deputados_ids = list(dict.fromkeys(deputado.get('id') for deputado in deputados if deputado.get('id')))
 
