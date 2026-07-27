@@ -153,14 +153,18 @@ async def _run(event: dict):
     # Filter resolved_params to match target extractor signature
     sig = inspect.signature(extractor_cls.extract)
     filtered_params = {k: v for k, v in resolved_params.items() if k in sig.parameters or any(p.kind == inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values())}
-    data = await extractor_cls(client).extract(**filtered_params)
+    extractor_instance = extractor_cls(client)
+    data = await extractor_instance.extract(**filtered_params)
 
     _write_output(data, destination, extractor_name, run_id)
+
+    # Check if extraction was partial (timeout or budget exhaustion)
+    status = "partial" if getattr(extractor_instance, "partial", False) else "success"
 
     return {
         "run_id": run_id,
         "extractor": extractor_name,
-        "status": "success",
+        "status": status,
         "records": len(data)
     }
 

@@ -9,3 +9,6 @@ __pycache__/
 airflow/logs/
 airflow/db/
 airflow/plugins/__pycache__/
+
+# Local pipeline orchestrator run logs/state
+local_run_logs/

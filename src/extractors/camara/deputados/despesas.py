@@ -3,6 +3,7 @@ from datetime import datetime
 import asyncio
 import json
 import aiohttp
+import time
 
 
 class AsyncDespesasExtractor(CamaraBaseExtractor):
@@ -17,6 +18,10 @@ class AsyncDespesasExtractor(CamaraBaseExtractor):
         request_tries: int = 4,
         batch_size: int = 40
     ):
+        self.partial = False
+        start_time = time.monotonic()
+        budget_seconds = 540  # 540s de 600s do handler, margem de 60s
+
         async with aiohttp.ClientSession() as session:
             params = {}
             if init_legislatura is not None:
@@ -35,6 +40,12 @@ class AsyncDespesasExtractor(CamaraBaseExtractor):
 
             all_expenses = []
             for batch_start in range(0, len(deputados_ids), batch_size):
+                elapsed = time.monotonic() - start_time
+                if elapsed >= budget_seconds:
+                    print(f'[despesas] Orçamento de tempo esgotado ({elapsed:.0f}s >= {budget_seconds}s), retornando dados parciais: {batch_start}/{len(deputados_ids)} deputados')
+                    self.partial = True
+                    break
+
                 batch_ids = deputados_ids[batch_start:batch_start + batch_size]
                 tasks = [
                     self._fetch_deputado(session, deputado_id, years_range, month, items)

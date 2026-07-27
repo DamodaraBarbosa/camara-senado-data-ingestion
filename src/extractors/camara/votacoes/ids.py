@@ -2,6 +2,7 @@ from extractors.camara.base import CamaraBaseExtractor
 import json
 import asyncio
 import aiohttp
+import time
 
 
 class AsyncVotacoesIdsExtractor(CamaraBaseExtractor):
@@ -12,11 +13,21 @@ class AsyncVotacoesIdsExtractor(CamaraBaseExtractor):
         votacoes: json,
         batch_size: int = 100
     ):
+        self.partial = False
+        start_time = time.monotonic()
+        budget_seconds = 540  # 540s de 600s do handler, margem de 60s
+
         votacoes_ids = list(dict.fromkeys(votacao.get('id') for votacao in votacoes if votacao.get('id')))
         all_ids = []
 
         async with aiohttp.ClientSession() as session:
             for batch_start in range(0, len(votacoes_ids), batch_size):
+                elapsed = time.monotonic() - start_time
+                if elapsed >= budget_seconds:
+                    print(f'[votacoes_ids] Orçamento de tempo esgotado ({elapsed:.0f}s >= {budget_seconds}s), retornando dados parciais: {batch_start}/{len(votacoes_ids)} votações')
+                    self.partial = True
+                    break
+
                 batch_ids = votacoes_ids[batch_start:batch_start + batch_size]
                 tasks = [
                     self.client.get(session, self.ENDPOINT.format(id=votacao_id))
