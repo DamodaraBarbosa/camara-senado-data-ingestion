@@ -141,6 +141,16 @@ def validate_graph(tasks: dict) -> None:
         raise ValueError("Invalid task graph: cycle detected in depends_on edges")
 
 
+def cache_output_path(spec: TaskSpec, ctx) -> Path:
+    """Caminho canônico da saída de uma task.
+
+    Espelha `src/utils/task_io.cache_path`. Desde a unificação do I/O, os 10
+    bundles usam a mesma convenção, então o orquestrador consegue verificar de
+    forma confiável se a saída de uma task resumida ainda está em disco.
+    """
+    return Path(ctx.cache_dir) / spec.bundle / f"{spec.extractor}_{ctx.run_id}.json"
+
+
 def build_event_payload(spec: TaskSpec, run_id: str) -> dict:
     params = {}
     if spec.bundle_cfg.get("init_legislatura") is not None:
@@ -182,8 +192,10 @@ def parse_result_json(text: str) -> Optional[dict]:
 
 
 class PipelineContext:
-    def __init__(self, run_id, max_workers, retries, retry_delay, python_bin, log_dir, resume_state):
+    def __init__(self, run_id, max_workers, retries, retry_delay, python_bin, log_dir, resume_state,
+                 cache_dir="/tmp"):
         self.run_id = run_id
+        self.cache_dir = cache_dir
         self.semaphore = asyncio.Semaphore(max_workers)
         self.retries = retries
         self.retry_delay = retry_delay
@@ -237,6 +249,7 @@ async def execute_once(spec: TaskSpec, attempt: int, ctx: PipelineContext):
     env["BUNDLE"] = spec.bundle
     env["EVENT_PAYLOAD"] = json.dumps(payload, ensure_ascii=False)
     env["PYTHONUNBUFFERED"] = "1"
+    env["CAMARA_CACHE_DIR"] = str(ctx.cache_dir)
     runner_path = REPO_ROOT / "bundles" / spec.bundle / "app" / "runner.py"
     log_path = ctx.log_dir / spec.log_filename
 
@@ -309,16 +322,24 @@ async def run_task(spec: TaskSpec, tasks: dict, ctx: PipelineContext) -> None:
 
     prior = ctx.resume_state.get(spec.task_id)
     if prior and prior.get("state") in ("SUCCESS", "PARTIAL"):
-        result = TaskResult(
-            spec.key,
-            TaskState(prior["state"]),
-            records=prior.get("records"),
-            resumed=True,
+        # Só pular se a saída ainda existir em disco. Os dependentes leem esse
+        # arquivo; pular uma task cujo output sumiu (ex.: /tmp limpo entre
+        # execuções) deixaria o dependente sem a entrada de que precisa.
+        output = cache_output_path(spec, ctx)
+        if output.exists():
+            result = TaskResult(
+                spec.key,
+                TaskState(prior["state"]),
+                records=prior.get("records"),
+                resumed=True,
+            )
+            ctx.results[spec.key] = result
+            await log_progress(ctx, f"RESUME   {result.state.value:16s} {spec.label:30s} (from prior run)")
+            ctx.finished[spec.key].set()
+            return
+        await log_progress(
+            ctx, f"RERUN             {spec.label:30s} (saída anterior ausente: {output})"
         )
-        ctx.results[spec.key] = result
-        await log_progress(ctx, f"RESUME   {result.state.value:16s} {spec.label:30s} (from prior run)")
-        ctx.finished[spec.key].set()
-        return
 
     attempts_allowed = 1 + ctx.retries
     state = TaskState.FAILED
@@ -421,6 +442,11 @@ def parse_args(argv=None) -> argparse.Namespace:
     parser.add_argument("--config", default=str(BUNDLES_CONFIG_PATH), help="Path to bundles_config.json")
     parser.add_argument("--python", default=None, help="Python interpreter to run runners with (default: venv/bin/python)")
     parser.add_argument("--fresh", action="store_true", help="Ignore any existing state.jsonl for --run-id")
+    parser.add_argument(
+        "--cache-dir",
+        default=os.getenv("CAMARA_CACHE_DIR", "/tmp"),
+        help="Base dir for task outputs, read by dependent tasks",
+    )
     parser.add_argument("--dry-run", action="store_true", help="Print the resolved task graph and exit")
     return parser.parse_args(argv)
 
@@ -463,6 +489,7 @@ def main(argv=None) -> int:
         python_bin=python_bin,
         log_dir=log_dir,
         resume_state=resume_state,
+        cache_dir=args.cache_dir,
     )
 
     results = asyncio.run(orchestrate(tasks, ctx))

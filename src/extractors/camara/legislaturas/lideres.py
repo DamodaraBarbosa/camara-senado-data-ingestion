@@ -1,4 +1,5 @@
 from extractors.camara.base import CamaraBaseExtractor
+from utils.concurrency import gather_aligned
 import json
 import asyncio
 import aiohttp
@@ -45,8 +46,9 @@ class AsyncLegislaturaLideresExtractor(CamaraBaseExtractor):
                 )
                 tasks.append(task)
 
-            results = await asyncio.gather(*tasks)
+            results, coverage, _errors = await gather_aligned(tasks, label='legislaturas/lideres')
 
             all_lideres = [item for sublist in results if sublist for item in sublist]
 
-            return all_lideres
+            self.partial = coverage < 0.99
+        return all_lideres

@@ -1,4 +1,5 @@
 from extractors.camara.base import CamaraBaseExtractor
+from utils.concurrency import gather_aligned
 import asyncio
 import aiohttp
 from datetime import datetime, date
@@ -83,8 +84,9 @@ class AsyncPartidosMembrosExtractor(CamaraBaseExtractor):
                         if temp_date > date.today():
                             break
 
-            results = await asyncio.gather(*tasks)
+            results, coverage, _errors = await gather_aligned(tasks, label='partidos/membros')
 
             all_membros = [item for sublist in results if sublist for item in sublist]
 
-            return all_membros
+            self.partial = coverage < 0.99
+        return all_membros

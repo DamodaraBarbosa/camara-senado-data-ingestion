@@ -1,4 +1,5 @@
 from extractors.camara.base import CamaraBaseExtractor
+from utils.concurrency import gather_aligned
 import json
 import asyncio
 import aiohttp
@@ -36,9 +37,10 @@ class AsyncEventosExtractor(CamaraBaseExtractor):
 
             tasks = [self._fetch_all_eventos_for_deputado(session, deputado_id, start_legislatura_date, items)
                      for deputado_id in deputados_ids]
-            results = await asyncio.gather(*tasks)
+            results, coverage, _errors = await gather_aligned(tasks, label='deputados/eventos')
 
             for eventos in results:
                 all_eventos.extend(eventos)
 
-            return all_eventos
+            self.partial = coverage < 0.99
+        return all_eventos

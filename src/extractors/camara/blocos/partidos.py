@@ -1,4 +1,5 @@
 from extractors.camara.base import CamaraBaseExtractor
+from utils.concurrency import gather_aligned
 import asyncio
 import aiohttp
 
@@ -20,7 +21,7 @@ class AsyncBlocosPartidosExtractor(CamaraBaseExtractor):
                 task = self.client.get(session, self.ENDPOINT.format(id=bloco))
                 tasks.append(task)
 
-            results = await asyncio.gather(*tasks)
+            results, coverage, _errors = await gather_aligned(tasks, label='blocos/partidos')
 
             for i, result in enumerate(results):
                 partidos_data = result.get('dados', [])
@@ -29,4 +30,5 @@ class AsyncBlocosPartidosExtractor(CamaraBaseExtractor):
                     partido['idBloco'] = bloco_id
                 all_partidos.extend(partidos_data)
 
+        self.partial = coverage < 0.99
         return all_partidos

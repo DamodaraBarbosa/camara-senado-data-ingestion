@@ -1,4 +1,5 @@
 from extractors.camara.base import CamaraBaseExtractor
+from utils.concurrency import gather_aligned
 import json
 import asyncio
 import aiohttp
@@ -22,13 +23,16 @@ class AsyncIdsExtractor(CamaraBaseExtractor):
             task = self.client.get(session, f'{self.ENDPOINT}{deputado_id}')
             tasks.append(task)
 
-        results = await asyncio.gather(*tasks)
+        results, coverage, _errors = await gather_aligned(tasks, label='deputados/ids')
 
         for result in results:
+            if result is None:
+                continue
             data = result.get('dados', {})
             all_ids.append(data)
 
         await session.close()
+        self.partial = coverage < 0.99
         return all_ids
 
         # response = self.client.get(self.ENDPOINT)

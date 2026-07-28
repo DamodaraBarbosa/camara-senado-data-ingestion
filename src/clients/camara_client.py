@@ -1,6 +1,8 @@
 import asyncio
-import aiohttp
+import os
 import random
+import time
+import aiohttp
 from urllib.parse import urlparse, parse_qs
 from email.utils import parsedate_to_datetime
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type, RetryError
@@ -14,9 +16,27 @@ _TIMEOUT = aiohttp.ClientTimeout(total=90, connect=30)
 # Status codes que justificam retry
 _RETRYABLE_STATUSES = {429, 500, 502, 503, 504}
 
-# Limite de tempo total para uma operação de extração (evita loops infinitos)
-# Se exceder esse tempo mesmo com retries, a task falha e Airflow faz retry
-_MAX_OPERATION_TIME = 600  # 10 minutos
+# A API da Câmara limita a 10 req/s por IP (documentado em
+# github.com/CamaraDosDeputados/dados-abertos/issues/251). Não há API key que
+# aumente esse teto. Ficamos abaixo dele de propósito: medições mostraram que
+# ultrapassar não aumenta throughput — colapsa. Com 2 tasks concorrentes o
+# pipeline rendia 2,04x MENOS que serial, e gastava 6x mais 429s para isso.
+_RATE_LIMIT_RPS = float(os.getenv("CAMARA_RATE_LIMIT_RPS", 8))
+
+# O rate limiter é quem faz cumprir o contrato da API; o semáforo só evita um
+# número ilimitado de requisições em voo. Para sustentar R req/s com latência
+# L, é preciso concorrência >= R*L — com R=8 e L~2s, um semáforo de 6 vira o
+# gargalo real e segura a taxa em ~3 req/s, sem o limiter sequer atuar.
+_MAX_CONCURRENCY = int(os.getenv("CAMARA_MAX_CONCURRENCY", 16))
+
+# 5xx consecutivos indicam que o backend está descartando carga (a tempestade
+# de 504 em votacoes vinha da nossa própria pressão). Pausa curta para deixar
+# respirar.
+_SERVER_ERROR_TRIP_THRESHOLD = int(os.getenv("CAMARA_5XX_TRIP_THRESHOLD", 5))
+_SERVER_ERROR_TRIP_SECONDS = 5.0
+
+# Teto para a pausa global, evitando que um Retry-After absurdo trave tudo.
+_MAX_PAUSE_SECONDS = 45.0
 
 
 class CamaraRateLimitError(aiohttp.ClientError):
@@ -55,18 +75,19 @@ def _parse_retry_after(header_value: str = None) -> float:
 
 
 def _camara_wait(retry_state) -> float:
-    """Wait strategy que respeita Retry-After header."""
-    exc = retry_state.outcome.exception() if retry_state.outcome else None
+    """Backoff local curto, com full jitter.
 
-    if isinstance(exc, CamaraRateLimitError) and exc.retry_after is not None:
-        # Clamp entre 1s e 45s para não estourar o budget de 600s
-        base = min(max(exc.retry_after, 1), 45)
-    else:
-        # Fallback para exponencial (min=2, max=30)
-        base = wait_exponential(multiplier=1, min=2, max=30)(retry_state)
+    A espera de verdade agora é feita uma única vez, globalmente, pelo
+    CircuitBreaker. Aqui só evitamos que as corrotinas liberadas pelo breaker
+    saiam todas no mesmo instante.
 
-    # Adicionar jitter para evitar retry sincronizado
-    return base + random.uniform(0, 2)
+    Full jitter (`uniform(0, base)`) em vez do antigo `base + uniform(0, 2)`:
+    com janela de 30s e jitter de apenas 2s, todas as corrotinas acordavam
+    dentro da mesma janela de 2 segundos e colidiam de novo — foi o que
+    produziu rajadas de até 108 rejeições consecutivas.
+    """
+    base = wait_exponential(multiplier=1, min=1, max=8)(retry_state)
+    return random.uniform(0, base)
 
 
 def _camara_stop(retry_state) -> bool:
@@ -80,15 +101,98 @@ def _camara_stop(retry_state) -> bool:
     return retry_state.attempt_number >= limit
 
 
+class RateLimiter:
+    """Token bucket que espaça as requisições no tempo.
+
+    O semáforo limita quantas requisições ficam *em voo*; isto limita a que
+    *taxa* elas partem. Sem o segundo controle, 6 requisições em voo com
+    respostas rápidas ainda estouram os 10 req/s.
+    """
+
+    def __init__(self, rate: float, burst: int = None):
+        self.rate = rate
+        self.burst = burst if burst is not None else max(1, int(rate))
+        self._tokens = float(self.burst)
+        self._updated = time.monotonic()
+        self._lock = None
+
+    async def acquire(self):
+        if self._lock is None:
+            self._lock = asyncio.Lock()
+        async with self._lock:
+            while True:
+                now = time.monotonic()
+                self._tokens = min(
+                    self.burst, self._tokens + (now - self._updated) * self.rate
+                )
+                self._updated = now
+                if self._tokens >= 1:
+                    self._tokens -= 1
+                    return
+                await asyncio.sleep((1 - self._tokens) / self.rate)
+
+
+class CircuitBreaker:
+    """Pausa global de todos os workers quando a API sinaliza sobrecarga.
+
+    Antes, cada corrotina fazia seu próprio backoff independentemente, e o
+    sleep acontecia *fora* do semáforo — o pool de corrotinas dormindo era
+    ilimitado e todas voltavam juntas. Um 429 vira aqui uma pausa única e
+    compartilhada.
+    """
+
+    def __init__(self):
+        self._gate = None
+        self._open_until = 0.0
+
+    def _ensure_gate(self):
+        if self._gate is None:
+            self._gate = asyncio.Event()
+            self._gate.set()
+        return self._gate
+
+    async def wait(self):
+        gate = self._ensure_gate()
+        while not gate.is_set():
+            await gate.wait()
+
+    def trip(self, seconds: float):
+        """Abre o circuito por `seconds`. Só estende, nunca encurta."""
+        gate = self._ensure_gate()
+        seconds = min(max(seconds, 0.0), _MAX_PAUSE_SECONDS)
+        deadline = time.monotonic() + seconds
+
+        if deadline <= self._open_until:
+            return  # já pausado por mais tempo
+        self._open_until = deadline
+
+        if gate.is_set():
+            gate.clear()
+            asyncio.create_task(self._reopen())  # exatamente um reopener
+
+    async def _reopen(self):
+        while True:
+            delay = self._open_until - time.monotonic()
+            if delay <= 0:
+                break
+            await asyncio.sleep(delay)  # re-checa: trip() pode ter estendido
+        self._gate.set()
+
+
 class AsyncCamaraClient:
-    def __init__(self, url='https://dadosabertos.camara.leg.br/api/v2/'):
+    def __init__(self, url='https://dadosabertos.camara.leg.br/api/v2/',
+                 rate_limit_rps: float = None, max_concurrency: int = None):
         self.url = url
         self._semaphore = None
+        self._max_concurrency = max_concurrency or _MAX_CONCURRENCY
+        self._limiter = RateLimiter(rate_limit_rps or _RATE_LIMIT_RPS)
+        self._breaker = CircuitBreaker()
+        self._consecutive_server_errors = 0
 
     @property
     def semaphore(self):
         if self._semaphore is None:
-            self._semaphore = asyncio.Semaphore(15)
+            self._semaphore = asyncio.Semaphore(self._max_concurrency)
         return self._semaphore
 
     @retry(
@@ -103,21 +207,39 @@ class AsyncCamaraClient:
 
         url = f'{self.url}{endpoint}'
 
+        # Ordem importa: esperar a pausa global ANTES de consumir um token e
+        # ocupar um slot do semáforo, para não segurar capacidade à toa.
+        await self._breaker.wait()
+        await self._limiter.acquire()
+
         async with self.semaphore:
             async with session.get(url, params=params, timeout=_TIMEOUT) as response:
                 if response.status == 404:
+                    self._consecutive_server_errors = 0
                     return {}
 
                 if response.status in _RETRYABLE_STATUSES:
                     retry_after = _parse_retry_after(response.headers.get('Retry-After'))
+
                     if response.status == 429 or retry_after is not None:
-                        print(f'[client] HTTP {response.status} — retry strategy will handle backoff (Retry-After: {retry_after}s).')
-                        raise CamaraRateLimitError(f"HTTP {response.status}: {response.reason}", retry_after=retry_after)
-                    else:
-                        print(f'[client] HTTP {response.status} — server error detected.')
-                        raise CamaraServerError(f"HTTP {response.status}: {response.reason}")
+                        pause = retry_after if retry_after is not None else 30.0
+                        self._breaker.trip(pause)
+                        raise CamaraRateLimitError(
+                            f"HTTP {response.status}: {response.reason}", retry_after=retry_after
+                        )
+
+                    self._consecutive_server_errors += 1
+                    if self._consecutive_server_errors >= _SERVER_ERROR_TRIP_THRESHOLD:
+                        print(
+                            f'[client] {self._consecutive_server_errors} erros 5xx consecutivos — '
+                            f'pausando {_SERVER_ERROR_TRIP_SECONDS}s.'
+                        )
+                        self._breaker.trip(_SERVER_ERROR_TRIP_SECONDS)
+                        self._consecutive_server_errors = 0
+                    raise CamaraServerError(f"HTTP {response.status}: {response.reason}")
 
                 response.raise_for_status()
+                self._consecutive_server_errors = 0
 
                 text = await response.text()
                 if not text:
@@ -125,15 +247,21 @@ class AsyncCamaraClient:
 
                 return await response.json()
 
-    async def get_all_pages(self, session: aiohttp.ClientSession, endpoint: str, params: dict = None, itens: int = 100):
+    async def get_all_pages(self, session: aiohttp.ClientSession, endpoint: str, params: dict = None,
+                            itens: int = 100, page_chunk: int = 50):
         """
-        Fetch all pages of a paginated endpoint in parallel using links metadata.
+        Fetch all pages of a paginated endpoint using links metadata.
+
+        As páginas são buscadas em blocos em vez de um único gather sobre todas
+        elas: um endpoint com milhares de páginas criava milhares de corrotinas
+        de uma vez, todas competindo pelo mesmo semáforo.
 
         Args:
             session: aiohttp ClientSession
             endpoint: API endpoint (e.g., 'deputados')
             params: Query parameters (optional)
             itens: Items per page (default 100)
+            page_chunk: Quantas páginas disparar por vez
 
         Returns:
             Combined list of all records from all pages
@@ -162,19 +290,21 @@ class AsyncCamaraClient:
                         pass
                 break
 
-        # If there are more pages, fetch them in parallel
-        if last_page > 1:
+        if last_page <= 1:
+            return all_data
+
+        for chunk_start in range(2, last_page + 1, page_chunk):
+            chunk_end = min(chunk_start + page_chunk, last_page + 1)
             tasks = []
-            for page_num in range(2, last_page + 1):
+            for page_num in range(chunk_start, chunk_end):
                 page_params = {**(params or {}), 'itens': itens, 'pagina': page_num}
                 page_params = {k: v for k, v in page_params.items() if v is not None}
-                task = self.get(session, endpoint, params=page_params)
-                tasks.append(task)
+                tasks.append(self.get(session, endpoint, params=page_params))
 
-            results = await asyncio.gather(*tasks)
-
-            for result in results:
-                page_data = result.get('dados', [])
-                all_data.extend(page_data)
+            for result in await asyncio.gather(*tasks, return_exceptions=True):
+                if isinstance(result, Exception):
+                    print(f'[client] Página falhou em {endpoint}: {result}')
+                    continue
+                all_data.extend(result.get('dados', []))
 
         return all_data

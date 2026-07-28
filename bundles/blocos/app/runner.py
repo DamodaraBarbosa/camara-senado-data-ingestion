@@ -14,10 +14,10 @@ if str(ROOT) not in sys.path:
 import asyncio
 import inspect
 import json
-import boto3
 import os
 
 from clients.camara_client import AsyncCamaraClient
+from utils.task_io import read_dependency, write_output
 from extractors.camara.blocos.blocos import AsyncBlocosExtractor
 from extractors.camara.blocos.ids import AsyncBlocosIdsExtractor
 from extractors.camara.blocos.partidos import AsyncBlocosPartidosExtractor
@@ -32,36 +32,6 @@ DEPENDENCIES = {
     "ids":      {"blocos": "blocos"},
     "partidos": {"blocos": "blocos"},
 }
-
-
-def _read_dependency_output(destination: dict, bundle_name: str, dependency_name: str, run_id: str):
-    """Try to read a dependency's cached output from S3 or local filesystem."""
-    try:
-        dest_type = destination.get("type", "local")
-
-        if dest_type == "s3":
-            bucket = destination.get("bucket")
-            prefix = destination.get("prefix", "").rstrip("/")
-            key = (
-                f"{prefix}/{dependency_name}_{run_id}.json" if prefix
-                else f"{dependency_name}_{run_id}.json"
-            )
-
-            s3_client = boto3.client("s3")
-            response = s3_client.get_object(Bucket=bucket, Key=key)
-            content = response["Body"].read().decode("utf-8")
-            return json.loads(content)
-
-        else:  # local
-            out_path = destination.get(
-                "path", f"/tmp/{bundle_name}/{dependency_name}_{run_id}.json"
-            )
-            with open(out_path, "r", encoding="utf-8") as f:
-                return json.load(f)
-
-    except Exception as e:
-        print(f"[cache] Failed to read {dependency_name} from cache: {e}")
-        return None
 
 
 def handler(event: dict, context=None):
@@ -103,7 +73,7 @@ async def _run(event: dict):
             )
 
             # Try to load from cache first (S3 or local)
-            cached_data = _read_dependency_output(destination, bundle_name, dependency, run_id)
+            cached_data = read_dependency(destination, bundle_name, dependency, run_id)
             if cached_data is not None:
                 resolved_params[param_name] = cached_data
                 continue
@@ -124,47 +94,14 @@ async def _run(event: dict):
     filtered_params = {k: v for k, v in resolved_params.items() if k in sig.parameters or any(p.kind == inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values())}
     data = await extractor_cls(client).extract(**filtered_params)
 
-    _write_output(data, destination, extractor_name, run_id)
+    records = write_output(data, destination, bundle_name, extractor_name, run_id)
 
     return {
         "run_id": run_id,
         "extractor": extractor_name,
         "status": "success",
-        "records": len(data)
+        "records": records
     }
-
-
-def _write_output(
-        data: list,
-        destination: dict,
-        extractor_name: str,
-        run_id: str
-    ):
-    dest_type = destination.get("type", "local")
-    content = json.dumps(data, ensure_ascii=False, indent=2)
-
-    if dest_type == "s3":
-        bucket = destination.get("bucket")
-        prefix = destination.get("prefix", "").rstrip("/")
-        key = (
-            f"{prefix}/{extractor_name}_{run_id}.json" if prefix
-            else f"{extractor_name}_{run_id}.json"
-        )
-        s3_client = boto3.client("s3")
-        s3_client.put_object(
-            Bucket=bucket,
-            Key=key,
-            Body=content.encode("utf-8"),
-        )
-
-    else:
-        out_path = destination.get(
-            "path", f"/tmp/blocos/{extractor_name}_{run_id}.json"
-        )
-        Path(out_path).parent.mkdir(parents=True, exist_ok=True)
-        with open(out_path, "w", encoding="utf-8") as f:
-            f.write(content)
-        print(f"Saved {len(data)} records to {out_path}")
 
 
 if __name__ == "__main__":

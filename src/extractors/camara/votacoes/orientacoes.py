@@ -1,52 +1,75 @@
 from extractors.camara.base import CamaraBaseExtractor
-import json
-import asyncio
 import aiohttp
-import time
+import json
+
+from utils.bulk import intern_str, nullify, to_int
+from utils.periods import resolve_years
 
 
 class AsyncVotacoesOrientacoes(CamaraBaseExtractor):
-    ENDPOINT = 'votacoes/{id}/orientacoes'
+    """Orientações de bancada por votação, a partir dos arquivos bulk.
+
+    Antes: uma requisição a ``votacoes/{id}/orientacoes`` por votação — ~9.846
+    requisições contra uma API limitada a 10 req/s, o que nunca cabia no
+    orçamento de 600s (entregava ~1.238 de 9.846).
+
+    Agora: um arquivo CSV por ano. O mapeamento é 1:1 com o endpoint de
+    detalhe, e o CSV já traz ``idVotacao``, sem chave a sintetizar.
+    """
+
+    DATASET = "votacoesOrientacoes"
 
     async def extract(
         self,
-        votacoes: json,
-        batch_size: int = 100
+        votacoes: json = None,
+        batch_size: int = 100,       # mantido por compatibilidade de assinatura
+        init_legislatura: int = None,
+        anos: list = None,
+        ano_inicio: int = None,
     ):
         self.partial = False
-        start_time = time.monotonic()
-        budget_seconds = 540  # 540s de 600s do handler, margem de 60s
-
-        votacoes_ids = list(dict.fromkeys(votacao.get('id') for votacao in votacoes if votacao.get('id')))
-        all_orientacoes = []
 
         async with aiohttp.ClientSession() as session:
-            for batch_start in range(0, len(votacoes_ids), batch_size):
-                elapsed = time.monotonic() - start_time
-                if elapsed >= budget_seconds:
-                    print(f'[orientacoes] Orçamento de tempo esgotado ({elapsed:.0f}s >= {budget_seconds}s), retornando dados parciais: {batch_start}/{len(votacoes_ids)} votações')
-                    self.partial = True
-                    break
+            years = await resolve_years(
+                self.client, session,
+                init_legislatura=init_legislatura, anos=anos, ano_inicio=ano_inicio,
+            )
 
-                batch_ids = votacoes_ids[batch_start:batch_start + batch_size]
-                tasks = [
-                    self.client.get(session, self.ENDPOINT.format(id=votacao_id))
-                    for votacao_id in batch_ids
-                ]
+        years = await self.bulk.available_partitions(self.DATASET, years)
 
-                results = await asyncio.gather(*tasks, return_exceptions=True)
+        # Quando a dependência é fornecida, restringe às votações dela para
+        # manter paridade exata com o comportamento atual.
+        wanted = None
+        if votacoes:
+            wanted = {
+                str(v.get("id")) for v in votacoes if v.get("id") is not None
+            }
 
-                for votacao_id, result in zip(batch_ids, results):
-                    if isinstance(result, Exception):
-                        print(f'Error while extracting orientacoes for votacao {votacao_id}: {result}')
-                        continue
-                    orientacoes = result.get('dados', [])
-
-                    for orientacao in orientacoes:
-                        orientacao['votacao_id'] = votacao_id
-
-                    all_orientacoes.extend(orientacoes)
-
-                print(f'[orientacoes] Lote {batch_start // batch_size + 1} concluído: {len(all_orientacoes)} records')
+        all_orientacoes = []
+        for ano in years:
+            rows = await self.bulk.read_rows(
+                self.DATASET, ano,
+                transform=_to_orientacao,
+                row_filter=(lambda r: r.get("idVotacao") in wanted) if wanted else None,
+            )
+            all_orientacoes.extend(rows)
+            print(f"[orientacoes] {ano}: {len(rows)} registros (total {len(all_orientacoes)})")
 
         return all_orientacoes
+
+
+def _to_orientacao(row: dict) -> dict:
+    return {
+        # A chave era injetada como `votacao_id` pelo extractor antigo; o
+        # downstream já depende desse nome.
+        "votacao_id": nullify(row.get("idVotacao")),
+        "uriVotacao": nullify(row.get("uriVotacao")),
+        "siglaOrgao": intern_str(nullify(row.get("siglaOrgao"))),
+        "descricao": nullify(row.get("descricao")),
+        "siglaBancada": intern_str(nullify(row.get("siglaBancada"))),
+        "uriBancada": nullify(row.get("uriBancada")),
+        "orientacao": intern_str(nullify(row.get("orientacao"))),
+        # Presentes no endpoint de detalhe, ausentes no arquivo bulk.
+        "codTipoLideranca": None,
+        "uriPartido": None,
+    }
