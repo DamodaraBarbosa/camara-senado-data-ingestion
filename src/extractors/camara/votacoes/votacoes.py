@@ -1,67 +1,64 @@
 from extractors.camara.base import CamaraBaseExtractor
-import asyncio
 import aiohttp
-from datetime import datetime, date
-from utils.utils import add_months
+
+from utils.bulk import intern_str, nullify, to_fk, to_int
+from utils.periods import legislatura_of_year, resolve_years
+
+DATASET = "votacoes"
+
+
+def votacao_from_row(row: dict, ano: int = None) -> dict:
+    """Converte uma linha de ``votacoes-{ano}.csv`` no formato da API.
+
+    O arquivo bulk é mais rico que ``GET /votacoes/{id}``: traz
+    ``votosSim``/``votosNao``/``votosOutros``, que o endpoint de detalhe não
+    devolve de forma alguma. Esses campos entram de forma aditiva.
+
+    Atenção ao tipo de ``id``: é string (``"2458405-38"``), não inteiro.
+    """
+    return {
+        "id": nullify(row.get("id")),  # string, não converter
+        "uri": nullify(row.get("uri")),
+        "data": nullify(row.get("data")),
+        "dataHoraRegistro": nullify(row.get("dataHoraRegistro")),
+        "idOrgao": to_int(row.get("idOrgao")),
+        "uriOrgao": nullify(row.get("uriOrgao")),
+        "siglaOrgao": intern_str(nullify(row.get("siglaOrgao"))),
+        # `0` no CSV significa "sem evento"; a API devolve null.
+        "idEvento": to_fk(row.get("idEvento")),
+        "uriEvento": nullify(row.get("uriEvento")) if to_fk(row.get("idEvento")) else None,
+        "aprovacao": to_int(row.get("aprovacao")),
+        "descricao": nullify(row.get("descricao")),
+        # Aditivos: ausentes no endpoint de detalhe.
+        "votosSim": to_int(row.get("votosSim")),
+        "votosNao": to_int(row.get("votosNao")),
+        "votosOutros": to_int(row.get("votosOutros")),
+        # A API expõe estes dois como campos planos, não aninhados — confirmado
+        # contra o endpoint de detalhe pelo harness de paridade.
+        "dataHoraUltimaAberturaVotacao": nullify(
+            row.get("ultimaAberturaVotacao_dataHoraRegistro")
+        ),
+        "descUltimaAberturaVotacao": nullify(row.get("ultimaAberturaVotacao_descricao")),
+        "ultimaApresentacaoProposicao": {
+            "dataHoraRegistro": nullify(row.get("ultimaApresentacaoProposicao_dataHoraRegistro")),
+            "descricao": nullify(row.get("ultimaApresentacaoProposicao_descricao")),
+            # A API nomeia assim; o CSV usa `_uriProposicao`.
+            "uriProposicaoCitada": nullify(row.get("ultimaApresentacaoProposicao_uriProposicao")),
+        },
+        "idLegislatura": legislatura_of_year(ano) if ano else None,
+    }
 
 
 class AsyncVotacoesExtractor(CamaraBaseExtractor):
-    ENDPOINT = 'votacoes'
-    LEGISLATURA = 'legislaturas'
+    """Votações a partir dos arquivos bulk.
 
-    async def _fetch_period_pages(
-        self,
-        session,
-        id_legislatura,
-        current_start_date,
-        request_tries,
-        id_proposicao,
-        id_evento,
-        id_orgao,
-        itens
-    ):
-        base_params = {
-            'idProposicao': id_proposicao,
-            'idEvento': id_evento,
-            'idOrgao': id_orgao,
-            'itens': itens
-        }
-
-        extracted_data = []
-        page = 1
-        empty_count = 0
-        current_params = {}
-
-        while empty_count < request_tries:
-            try:
-                current_params = base_params.copy()
-                current_params.update({
-                    'dataInicio': current_start_date.isoformat(),
-                    'pagina': page
-                })
-
-                current_params = {k: v for k, v in current_params.items() if v is not None}
-
-                response = await self.client.get(session, self.ENDPOINT, params=current_params)
-                data = response.get('dados', [])
-
-                if not data:
-                    empty_count += 1
-                    page += 1
-                    continue
-
-                for votacao in data:
-                    votacao['idLegislatura'] = id_legislatura
-
-                extracted_data.extend(data)
-                empty_count = 0
-                page += 1
-
-            except Exception as e:
-                print(f'Error fetching votacoes from API with params {current_params}. Error: {e}')
-                break
-
-        return extracted_data
+    Antes: varredura trimestral por ``votacoes?dataInicio=...``. Como
+    ``dataInicio`` é um filtro aberto (``>=``), os 14 períodos re-liam
+    largamente os mesmos dados — caro e propenso a 504. Pior, o guard de
+    orçamento era código morto (``batch_size=50`` sobre 14 períodos gera uma
+    única iteração), então a extração virava um ``gather`` ilimitado: 569s numa
+    execução, 601s e falha total na seguinte.
+    """
 
     async def extract(
         self,
@@ -69,54 +66,43 @@ class AsyncVotacoesExtractor(CamaraBaseExtractor):
         id_proposicao: list = None,
         id_evento: list = None,
         id_orgao: list = None,
-        itens: int = 100,
-        request_tries: int = 4
+        itens: int = 100,            # mantidos por compatibilidade de assinatura
+        request_tries: int = 4,
+        batch_size: int = 50,
+        anos: list = None,
+        ano_inicio: int = None,
     ):
+        self.partial = False
+
         async with aiohttp.ClientSession() as session:
-            params = {}
-            if init_legislatura is not None:
-                params['id'] = init_legislatura
-            legilslatura = await self.client.get(session, self.LEGISLATURA, params=params)
-            start_legislatura_date = legilslatura['dados'][0].get('dataInicio', None) if legilslatura.get('dados') else None
-            start_legislatura_year = int(start_legislatura_date.split('-')[0]) if start_legislatura_date else None
+            years = await resolve_years(
+                self.client, session,
+                init_legislatura=init_legislatura, anos=anos, ano_inicio=ano_inicio,
+            )
+        years = await self.bulk.available_partitions(DATASET, years)
 
-            current_year = datetime.now().year
-            start_year = start_legislatura_year if start_legislatura_year else current_year
-            years_range = range(start_year, current_year + 1)
+        # Filtros que antes eram query params da API viram filtros em memória.
+        orgaos = {str(o) for o in id_orgao} if id_orgao else None
+        eventos = {str(e) for e in id_evento} if id_evento else None
+        proposicoes = {str(p) for p in id_proposicao} if id_proposicao else None
 
-            tasks = []
+        def keep(row):
+            if orgaos and row.get("idOrgao") not in orgaos:
+                return False
+            if eventos and row.get("idEvento") not in eventos:
+                return False
+            if proposicoes and row.get("ultimaApresentacaoProposicao_idProposicao") not in proposicoes:
+                return False
+            return True
 
-            for index, ano in enumerate(years_range):
-                id_legislatura = init_legislatura + (index // 4) if init_legislatura is not None else None
+        all_votacoes = []
+        for ano in years:
+            rows = await self.bulk.read_rows(
+                DATASET, ano,
+                transform=lambda r, a=ano: votacao_from_row(r, a),
+                row_filter=keep if (orgaos or eventos or proposicoes) else None,
+            )
+            all_votacoes.extend(rows)
+            print(f"[votacoes] {ano}: {len(rows)} registros (total {len(all_votacoes)})")
 
-                if init_legislatura is not None and index % 4 == 0 and id_legislatura == init_legislatura:
-                    current_start_date = date(ano, 2, 1)
-                else:
-                    current_start_date = date(ano, 1, 1)
-
-                if current_start_date > date.today():
-                    break
-
-                temp_date = current_start_date
-                while temp_date.year == ano:
-                    task = self._fetch_period_pages(
-                        session=session,
-                        id_legislatura=id_legislatura,
-                        current_start_date=temp_date,
-                        request_tries=request_tries,
-                        id_proposicao=id_proposicao,
-                        id_evento=id_evento,
-                        id_orgao=id_orgao,
-                        itens=itens
-                    )
-                    tasks.append(task)
-
-                    temp_date = add_months(temp_date, 3)
-                    if temp_date > date.today():
-                        break
-
-            results = await asyncio.gather(*tasks)
-
-            all_votacoes = [item for sublist in results if sublist for item in sublist]
-
-            return all_votacoes
+        return all_votacoes

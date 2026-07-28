@@ -12,10 +12,12 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 import asyncio
+import inspect
 import json
-import boto3
+import os
 
 from clients.camara_client import AsyncCamaraClient
+from utils.task_io import read_dependency, write_output
 from extractors.camara.deputados.deputados import AsyncDeputadosExtractor
 from extractors.camara.deputados.ids import AsyncIdsExtractor
 from extractors.camara.deputados.discursos import AsyncDiscursosExtractor
@@ -63,8 +65,25 @@ DEPENDENCIES = {
 }
 
 
+# despesas baixa e faz parse de vários anos de CEAP (~750k linhas). O parse
+# (CPU-bound, single-thread) roda muito mais devagar no vCPU do Fargate do
+# que num dev laptop, com bastante variância de rede (retries/resumes
+# observados) — mesmo 1800s não foi suficiente num teste real, por isso a
+# margem ampla.
+_TIMEOUT_OVERRIDES = {"despesas": 3600}
+_DEFAULT_TIMEOUT = 600
+
+
 def handler(event: dict, context=None):
-    return asyncio.run(_run(event))
+    """Main handler with timeout protection (10 min max per extraction, configurável por extractor)."""
+    timeout = _TIMEOUT_OVERRIDES.get(event.get("extractor"), _DEFAULT_TIMEOUT)
+    try:
+        return asyncio.run(
+            asyncio.wait_for(_run(event), timeout=timeout)
+        )
+    except asyncio.TimeoutError:
+        print(f"[ERROR] Extração excedeu timeout de {timeout // 60} minutos. Falhando para retry do Airflow.")
+        raise TimeoutError(f"Extraction timeout exceeded {timeout} seconds") from None
 
 
 async def _run(event: dict):
@@ -83,6 +102,7 @@ async def _run(event: dict):
         )
 
     client = AsyncCamaraClient()
+    bundle_name = os.getenv("BUNDLE", "deputados")
 
     resolved_params = dict(params)
     for param_name, dep_extractor_name in DEPENDENCIES.get(
@@ -92,61 +112,47 @@ async def _run(event: dict):
             print(
                 f"[runner] Resolving dependency '{param_name}' via '{dep_extractor_name}'..."
             )
+
+            # Try to load from cache first (S3 or local)
+            cached_data = read_dependency(destination, bundle_name, dep_extractor_name, run_id)
+            if cached_data is not None:
+                resolved_params[param_name] = cached_data
+                continue
+
+            # Fall back to recomputation
             dep_cls = EXTRACTORS[dep_extractor_name]
-            dep_data = await dep_cls(client).extract(
+            dep_result = dep_cls(client).extract(
                 **{k: v for k, v in params.items()
                    if k in dep_cls.extract.__code__.co_varnames}
             )
+            # Nota: se um extractor-dependência virar gerador assíncrono no futuro,
+            # descomente o .isasyncgen check abaixo. Hoje nenhum extractors em
+            # DEPENDENCIES retorna gerador.
+            dep_data = await dep_result
             resolved_params[param_name] = dep_data
             print(
                 f"[runner] Dependency '{param_name}' resolved: {len(dep_data)} records."
             )
 
-    data = await extractor_cls(client).extract(**resolved_params)
+    # Filter resolved_params to match target extractor signature
+    sig = inspect.signature(extractor_cls.extract)
+    filtered_params = {k: v for k, v in resolved_params.items() if k in sig.parameters or any(p.kind == inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values())}
+    extractor_instance = extractor_cls(client)
+    result = extractor_instance.extract(**filtered_params)
+    # Alguns extractors (ex: despesas) retornam geradores assíncrono para streaming
+    data = result if inspect.isasyncgen(result) else await result
 
-    _write_output(data, destination, extractor_name, run_id)
+    records = await write_output(data, destination, bundle_name, extractor_name, run_id)
+
+    # Check if extraction was partial (timeout or budget exhaustion)
+    status = "partial" if getattr(extractor_instance, "partial", False) else "success"
 
     return {
         "run_id": run_id,
         "extractor": extractor_name,
-        "status": "success",
-        "records": len(data)
+        "status": status,
+        "records": records
     }
-
-
-def _write_output(
-        data: list,
-        destination: dict,
-        extractor_name: str,
-        run_id: str
-    ):
-    dest_type = destination.get("type", "local")
-    content = json.dumps(data, ensure_ascii=False, indent=2)
-
-    if dest_type == "s3":
-        bucket = destination.get("bucket")
-        prefix = destination.get("prefix", "").rstrip("/")
-        key = (
-            f"{prefix}/{extractor_name}_{run_id}.json" if prefix
-            else f"{extractor_name}_{run_id}.json"
-        )  # noqa: E501
-        s3_client = boto3.client('s3')
-        s3_client.put_object(
-            Bucket=bucket,
-            Key=key,
-            Body=content.encode('utf-8'))
-
-    elif dest_type == "local":
-        out_path = destination.get(
-            "path", f"/tmp/deputados/{extractor_name}_{run_id}.json"
-        )
-        Path(out_path).parent.mkdir(parents=True, exist_ok=True)
-        with open(out_path, "w", encoding="utf-8") as f:
-            f.write(content)
-        print(f"Saved {len(data)} records to {out_path}")
-
-    else:
-        raise ValueError(f"Unknown destination type: {dest_type}")
 
 
 if __name__ == "__main__":
@@ -173,9 +179,7 @@ if __name__ == "__main__":
             # Fallback padrão seguro para testes locais ou produção sem parâmetros
             event = {
                 "extractor": "deputados",
-                "params": {
-                    "init_legislatura": 57
-                },
+                "params": {},
                 "destination": {
                     "type": "local",
                     "path": "/tmp/deputados/deputados_output.json"
@@ -183,5 +187,5 @@ if __name__ == "__main__":
                 "run_id": "ecs-test"
             }
 
-    result = asyncio.run(_run(event))
+    result = handler(event)
     print(json.dumps(result, ensure_ascii=False, indent=2))

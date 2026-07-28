@@ -1,7 +1,7 @@
 {
   "extractor": "deputados",
   "params": {
-    "init_legislatura": 56,
+    "init_legislatura": null,
     "sigla_partido": null,
     "sigla_uf": null,
     "sigla_sexo": null,

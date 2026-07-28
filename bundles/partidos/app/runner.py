@@ -12,9 +12,11 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 import asyncio
+import inspect
 import json
 
 from clients.camara_client import AsyncCamaraClient
+from utils.task_io import read_dependency, write_output
 from extractors.camara.partidos.partidos import AsyncPartidosExtractor
 from extractors.camara.partidos.ids import AsyncPartidosIdsExtractor
 from extractors.camara.partidos.lideres import AsyncLideresExtractor
@@ -35,7 +37,14 @@ DEPENDENCIES = {
 
 
 def handler(event: dict, context=None):
-    return asyncio.run(_run(event))
+    """Main handler with timeout protection (10 min max per extraction)."""
+    try:
+        return asyncio.run(
+            asyncio.wait_for(_run(event), timeout=600)  # 10 minutos = 600s
+        )
+    except asyncio.TimeoutError:
+        print("[ERROR] Extração excedeu timeout de 10 minutos. Falhando para retry do Airflow.")
+        raise TimeoutError("Extraction timeout exceeded 10 minutes") from None
 
 
 async def _run(event: dict):
@@ -54,6 +63,7 @@ async def _run(event: dict):
         )
     
     client = AsyncCamaraClient()
+    bundle_name = os.getenv("BUNDLE", "partidos")
 
     resolved_params = dict(params)
     for param_name, dependency in DEPENDENCIES.get(
@@ -63,6 +73,14 @@ async def _run(event: dict):
             print(
                 f"[runner] Resolving dependency '{param_name}' via '{dependency}'..."
             )
+
+            # Try to load from cache first (S3 or local)
+            cached_data = read_dependency(destination, bundle_name, dependency, run_id)
+            if cached_data is not None:
+                resolved_params[param_name] = cached_data
+                continue
+
+            # Fall back to recomputation
             dep_cls = EXTRACTORS[dependency]
             dep_data = await dep_cls(client).extract(
                 **{k: v for k, v in params.items()
@@ -73,53 +91,19 @@ async def _run(event: dict):
                 f"[runner] Dependency '{param_name}' resolved: {len(dep_data)} records."
             )
 
-    data = await extractor_cls(client).extract(**resolved_params)
+    # Filter resolved_params to match target extractor signature
+    sig = inspect.signature(extractor_cls.extract)
+    filtered_params = {k: v for k, v in resolved_params.items() if k in sig.parameters or any(p.kind == inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values())}
+    data = await extractor_cls(client).extract(**filtered_params)
 
-    _write_output(data, destination, extractor_name, run_id)
+    records = await write_output(data, destination, bundle_name, extractor_name, run_id)
 
     return {
         "run_id": run_id,
         "extractor": extractor_name,
         "status": "success",
-        "records": len(data)
+        "records": records
     }
-
-
-def _write_output(
-        data: list,
-        destination: dict,
-        extractor_name: str,
-        run_id: str
-    ):
-    dest_type = destination.get("type", "local")
-    content = json.dumps(data, ensure_ascii=False, indent=2)
-
-    if dest_type == "s3":
-        import boto3
-        bucket = destination.get("bucket")
-        prefix = destination.get("prefix", "").rstrip("/")
-        key = (
-            f"{prefix}/{extractor_name}_{run_id}.json" if prefix
-            else f"{extractor_name}_{run_id}.json"
-        )
-        s3 = boto3.client("s3")
-        s3.put_object(
-            Bucket=bucket,
-            Key=key,
-            Body=content.encode("utf-8"),
-            ContentType="application/json"
-        )
-        print(f"[runner] Written {len(data)} records to s3://{bucket}/{key}")
-
-    elif dest_type == "local":
-        output_path = Path(destination.get("path", f"/tmp/partidos/{extractor_name}.json"))
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(output_path, "w", encoding="utf-8") as f:
-            f.write(content)
-        print(f"[runner] Written {len(data)} records to {output_path}")
-
-    else:
-        raise ValueError(f"Unknown destination type: {dest_type}")
 
 
 if __name__ == "__main__":
@@ -147,9 +131,7 @@ if __name__ == "__main__":
             # Fallback padrão seguro para testes locais ou produção sem parâmetros
             event = {
                 "extractor": "partidos",
-                "params": {
-                    "init_legislatura": 57
-                },
+                "params": {},
                 "destination": {
                     "type": "local",
                     "path": "/tmp/partidos/partidos_output.json"

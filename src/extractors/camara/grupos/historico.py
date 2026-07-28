@@ -1,4 +1,5 @@
 from extractors.camara.base import CamaraBaseExtractor
+from utils.concurrency import gather_aligned
 import aiohttp
 import asyncio
 
@@ -20,7 +21,7 @@ class AsyncGruposHistoricoExtractor(CamaraBaseExtractor):
                 task = self.client.get(session, self.ENDPOINT.format(id=grupo_id))
                 tasks.append(task)
 
-            results = await asyncio.gather(*tasks)
+            results, coverage, _errors = await gather_aligned(tasks, label='grupos/historico')
 
             for index, result in enumerate(results):
                 historico_data = result.get('dados', [])
@@ -29,4 +30,5 @@ class AsyncGruposHistoricoExtractor(CamaraBaseExtractor):
                     historico['idGrupo'] = grupo_id
                 all_historico.extend(historico_data)
 
+        self.partial = coverage < 0.99
         return all_historico

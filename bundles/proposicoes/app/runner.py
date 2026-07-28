@@ -1,4 +1,5 @@
 import sys
+import os
 from pathlib import Path
 
 # Allow running this script directly from the repo root without setting
@@ -12,56 +13,54 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 import asyncio
+import inspect
 import json
 
 from clients.camara_client import AsyncCamaraClient
+from utils.task_io import read_dependency, write_output
 from extractors.camara.proposicoes.proposicoes import AsyncProposicoesExtractor
 from extractors.camara.proposicoes.ids import AsyncIdsExtractor
-from extractors.camara.proposicoes.autores import AsyncAutoresExtractor
 from extractors.camara.proposicoes.codigo_situacao import AsyncCodigoSituacaoExtractor
 from extractors.camara.proposicoes.codigo_tema import AsyncCodigoTemaExtractor
 from extractors.camara.proposicoes.codigo_tipo_autor import AsyncCodigoTipoAutorExtractor
 from extractors.camara.proposicoes.codigo_tipo_tramitacao import AsyncCodigoTipoTramitacaoExtractor
-from extractors.camara.proposicoes.relacionadas import AsyncRelacionadasExtractor
 from extractors.camara.proposicoes.sigla_tipo import AsyncSiglaTipoExtractor
 from extractors.camara.proposicoes.situacoes_proposicao import AsyncSituacoesProposicaoExtractor
-from extractors.camara.proposicoes.temas import AsyncTemasExtractor
 from extractors.camara.proposicoes.tipos_autor import AsyncTiposAutorExtractor
 from extractors.camara.proposicoes.tipos_proposicao import AsyncTiposProposicaoExtractor
 from extractors.camara.proposicoes.tipos_tramitacao import AsyncTiposTramitacaoExtractor
-from extractors.camara.proposicoes.tramitacoes import AsyncTramitacoesExtractor
-from extractors.camara.proposicoes.votacoes import AsyncVotacoesExtractor
 
 EXTRACTORS = {
     "proposicoes": AsyncProposicoesExtractor,
     "ids": AsyncIdsExtractor,
-    "autores": AsyncAutoresExtractor,
     "codigo_situacao": AsyncCodigoSituacaoExtractor,
     "codigo_tema": AsyncCodigoTemaExtractor,
     "codigo_tipo_autor": AsyncCodigoTipoAutorExtractor,
     "codigo_tipo_tramitacao": AsyncCodigoTipoTramitacaoExtractor,
-    "relacionadas": AsyncRelacionadasExtractor,
     "sigla_tipo": AsyncSiglaTipoExtractor,
     "situacoes_proposicao": AsyncSituacoesProposicaoExtractor,
-    "temas": AsyncTemasExtractor,
     "tipos_autor": AsyncTiposAutorExtractor,
     "tipos_proposicao": AsyncTiposProposicaoExtractor,
     "tipos_tramitacao": AsyncTiposTramitacaoExtractor,
-    "tramitacoes": AsyncTramitacoesExtractor,
-    "votacoes": AsyncVotacoesExtractor,
 }
 
 DEPENDENCIES = {
     "ids":         {"proposicoes": "proposicoes"},
-    "autores":     {"proposicoes": "proposicoes"},
-    "relacionadas": {"proposicoes": "proposicoes"},
-    "tramitacoes": {"proposicoes": "proposicoes"},
-    "votacoes":    {"proposicoes": "proposicoes"},
 }
 
 
 def handler(event: dict, context=None):
-    return asyncio.run(_run(event))
+    """
+    Main handler with timeout protection.
+    Máximo 10 minutos por extração para evitar tasks presas em retry loops.
+    """
+    try:
+        return asyncio.run(
+            asyncio.wait_for(_run(event), timeout=600)  # 10 minutos = 600s
+        )
+    except asyncio.TimeoutError:
+        print("[ERROR] Extração excedeu timeout de 10 minutos. Falhando para retry do Airflow.")
+        raise TimeoutError("Extraction timeout exceeded 10 minutes") from None
 
 
 async def _run(event: dict):
@@ -82,6 +81,8 @@ async def _run(event: dict):
     client = AsyncCamaraClient()
 
     resolved_params = dict(params)
+    bundle_name = os.getenv("BUNDLE", "proposicoes")
+
     for param_name, dependency in DEPENDENCIES.get(
             extractor_name, {}
         ).items():
@@ -89,6 +90,14 @@ async def _run(event: dict):
             print(
                 f"[runner] Resolving dependency '{param_name}' via '{dependency}'..."
             )
+
+            # Try to load from cache first (S3 or local)
+            cached_data = read_dependency(destination, bundle_name, dependency, run_id)
+            if cached_data is not None:
+                resolved_params[param_name] = cached_data
+                continue
+
+            # Fall back to recomputation
             dep_cls = EXTRACTORS[dependency]
             dep_data = await dep_cls(client).extract(
                 **{k: v for k, v in params.items()
@@ -99,53 +108,23 @@ async def _run(event: dict):
                 f"[runner] Dependency '{param_name}' resolved: {len(dep_data)} records."
             )
 
-    data = await extractor_cls(client).extract(**resolved_params)
+    # Filter resolved_params to match target extractor signature
+    sig = inspect.signature(extractor_cls.extract)
+    filtered_params = {k: v for k, v in resolved_params.items() if k in sig.parameters or any(p.kind == inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values())}
+    extractor_instance = extractor_cls(client)
+    data = await extractor_instance.extract(**filtered_params)
 
-    _write_output(data, destination, extractor_name, run_id)
+    records = await write_output(data, destination, bundle_name, extractor_name, run_id)
+
+    # Check if extraction was partial (timeout or budget exhaustion)
+    status = "partial" if getattr(extractor_instance, "partial", False) else "success"
 
     return {
         "run_id": run_id,
         "extractor": extractor_name,
-        "status": "success",
-        "records": len(data)
+        "status": status,
+        "records": records
     }
-
-
-def _write_output(
-        data: list,
-        destination: dict,
-        extractor_name: str,
-        run_id: str
-    ):
-    dest_type = destination.get("type", "local")
-    content = json.dumps(data, ensure_ascii=False, indent=2)
-
-    if dest_type == "s3":
-        import boto3
-        bucket = destination.get("bucket")
-        prefix = destination.get("prefix", "").rstrip("/")
-        key = (
-            f"{prefix}/{extractor_name}_{run_id}.json" if prefix
-            else f"{extractor_name}_{run_id}.json"
-        )
-        s3 = boto3.client("s3")
-        s3.put_object(
-            Bucket=bucket,
-            Key=key,
-            Body=content.encode("utf-8"),
-            ContentType="application/json"
-        )
-        print(f"[runner] Written {len(data)} records to s3://{bucket}/{key}")
-
-    elif dest_type == "local":
-        output_path = Path(destination.get("path", f"/tmp/proposicoes/{extractor_name}.json"))
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(output_path, "w", encoding="utf-8") as f:
-            f.write(content)
-        print(f"[runner] Written {len(data)} records to {output_path}")
-
-    else:
-        raise ValueError(f"Unknown destination type: {dest_type}")
 
 
 if __name__ == "__main__":
@@ -173,9 +152,7 @@ if __name__ == "__main__":
             # Fallback padrão seguro para testes locais ou produção sem parâmetros
             event = {
                 "extractor": "proposicoes",
-                "params": {
-                    "init_legislatura": 57
-                },
+                "params": {},
                 "destination": {
                     "type": "local",
                     "path": "/tmp/proposicoes/proposicoes_output.json"

@@ -1,7 +1,7 @@
 {
   "extractor": "orgaos",
   "params": {
-    "init_legislatura": 56,
+    "init_legislatura": null,
     "id_orgao": null,
     "sigla": null,
     "itens": 100,

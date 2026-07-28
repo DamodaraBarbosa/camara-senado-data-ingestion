@@ -1,4 +1,5 @@
 from extractors.camara.base import CamaraBaseExtractor
+from utils.concurrency import gather_aligned
 import json
 import asyncio
 import aiohttp
@@ -48,10 +49,13 @@ class AsyncMesaExtractor(CamaraBaseExtractor):
                         if temp_date > date.today():
                             break
 
-            results = await asyncio.gather(*tasks)
+            results, coverage, _errors = await gather_aligned(tasks, label='legislaturas/mesa')
 
             for result in results:
+                if result is None:
+                    continue
                 data = result.get('dados', [])
                 all_mesas.extend(data)
 
-            return all_mesas
+            self.partial = coverage < 0.99
+        return all_mesas

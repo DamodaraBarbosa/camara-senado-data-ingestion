@@ -3,3 +3,12 @@ venv/
 __pycache__/
 *.pyc
 .env
+.env.docker
+
+# Airflow logs and dynamic data
+airflow/logs/
+airflow/db/
+airflow/plugins/__pycache__/
+
+# Local pipeline orchestrator run logs/state
+local_run_logs/

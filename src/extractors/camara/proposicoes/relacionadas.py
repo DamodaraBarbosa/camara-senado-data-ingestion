@@ -1,5 +1,6 @@
 from extractors.camara.base import CamaraBaseExtractor
 import json
+import asyncio
 import aiohttp
 
 
@@ -8,25 +9,32 @@ class AsyncRelacionadasExtractor(CamaraBaseExtractor):
 
     async def extract(
         self,
-        proposicoes: json
+        proposicoes: json,
+        batch_size: int = 100
     ):
-        session = aiohttp.ClientSession()
         proposicoes_ids = list(dict.fromkeys(proposicao.get('id')
                                for proposicao in proposicoes if proposicao.get('id')))
         all_relacionadas = []
 
-        for proposicao_id in proposicoes_ids:
-            try:
-                response = await self.client.get(session, self.ENDPOINT.format(id=proposicao_id))
-                data = response.get('dados', [])
+        async with aiohttp.ClientSession() as session:
+            for batch_start in range(0, len(proposicoes_ids), batch_size):
+                batch_ids = proposicoes_ids[batch_start:batch_start + batch_size]
+                tasks = [
+                    self.client.get(session, self.ENDPOINT.format(id=proposicao_id))
+                    for proposicao_id in batch_ids
+                ]
 
-                for relacionada in data:
-                    relacionada['relacionadoProposicao'] = proposicao_id
+                results = await asyncio.gather(*tasks, return_exceptions=True)
 
-                all_relacionadas.extend(data)
+                for proposicao_id, result in zip(batch_ids, results):
+                    if isinstance(result, Exception):
+                        print(f'Error while extracting relacionadas for proposicao {proposicao_id}: {result}')
+                        continue
+                    relacionadas_data = result.get('dados', [])
+                    for relacionada in relacionadas_data:
+                        relacionada['relacionadoProposicao'] = proposicao_id
+                    all_relacionadas.extend(relacionadas_data)
 
-            except Exception as e:
-                print(f'Error while extracting relacionadas for proposicao {proposicao_id}: {e}')
+                print(f'[relacionadas] Lote {batch_start // batch_size + 1} concluído: {len(all_relacionadas)} records')
 
-        await session.close()
         return all_relacionadas

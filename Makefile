@@ -1,8 +1,10 @@
 .PHONY: help build up down logs clean test push-ecr
 
 # Variables
-IMAGE_NAME ?= camera-extractor
+IMAGE_NAME ?= camara-ingestion
 IMAGE_TAG ?= latest
+AWS_ACCOUNT_ID ?= 904464083417
+AWS_REGION ?= us-east-1
 ECR_REGISTRY ?= $(AWS_ACCOUNT_ID).dkr.ecr.$(AWS_REGION).amazonaws.com
 DOCKER_COMPOSE_FILE ?= docker-compose.yml
 COMPOSE = docker-compose -f $(DOCKER_COMPOSE_FILE)
