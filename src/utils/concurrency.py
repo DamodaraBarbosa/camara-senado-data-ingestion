@@ -1,22 +1,22 @@
-"""Execução concorrente com cobertura mínima e respeito a prazo.
+"""Concurrent execution with coverage tracking and deadline respect.
 
-Dois problemas motivam este módulo:
+Two problems motivate this module:
 
-1. 36 sites usavam ``asyncio.gather(*tasks)`` sem ``return_exceptions=True``:
-   uma requisição que esgota os retries mata o extractor inteiro.
-2. Os que usavam ``return_exceptions=True`` engoliam as falhas sem checar nada.
-   ``votacoes/votacoes`` teve 10 dos 14 períodos falhando com HTTP 504 e ainda
-   assim reportou ``SUCCESS``.
+1. 36 sites used ``asyncio.gather(*tasks)`` without ``return_exceptions=True``:
+   one request exhausting retries kills the extractor.
+2. Those using ``return_exceptions=True`` swallowed failures without checking.
+   ``votacoes/votacoes`` had 10 of 14 periods failing with HTTP 504 and still
+   reported ``SUCCESS``.
 
-``gather_with_coverage`` resolve os dois: nunca propaga falha de um membro, mas
-devolve a cobertura para o chamador decidir se o resultado é aceitável.
+``gather_with_coverage`` solves both: never propagates one member's failure, but
+returns coverage so the caller can decide if the result is acceptable.
 """
 import asyncio
 from collections import Counter
 
 
 class InsufficientData(RuntimeError):
-    """Nenhum dado obtido apesar de erros — nunca gravar saída vazia."""
+    """No data obtained despite errors — never write empty output."""
 
 
 async def gather_with_coverage(
@@ -26,18 +26,18 @@ async def gather_with_coverage(
     deadline=None,
     cancel_pending: bool = True,
 ):
-    """Executa corrotinas concorrentemente, tolerando falhas individuais.
+    """Execute coroutines concurrently, tolerating individual failures.
 
-    Diferente de ``asyncio.gather(..., return_exceptions=True)``, respeita um
-    prazo: o que não terminar a tempo é cancelado e o que já terminou é
-    aproveitado. Era exatamente o que faltava quando um lote de ``votacoes``
-    rodou 601s e descartou 569s de trabalho concluído.
+    Unlike ``asyncio.gather(..., return_exceptions=True)``, respects a
+    deadline: what doesn't finish in time is canceled, but what already finished
+    is retained. That's exactly what was missing when a ``votacoes`` batch
+    ran 601s and discarded 569s of completed work.
 
     Args:
-        coros: corrotinas a executar.
-        label: prefixo dos logs, ex. ``"votacoes"``.
-        deadline: ``utils.budget.Deadline`` opcional limitando a espera.
-        cancel_pending: cancelar o que não terminou dentro do prazo.
+        coros: Coroutines to execute.
+        label: Log prefix, e.g. ``"votacoes"``.
+        deadline: Optional ``utils.budget.Deadline`` limiting wait.
+        cancel_pending: Cancel what didn't finish within the deadline.
 
     Returns:
         ``(resultados_ok, cobertura, erros)`` — cobertura em [0.0, 1.0].

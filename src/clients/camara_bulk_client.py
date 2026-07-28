@@ -1,14 +1,13 @@
-"""Cliente para os arquivos bulk oficiais da Câmara.
+"""Client for the Câmara's official bulk files.
 
-Módulo separado do ``AsyncCamaraClient`` de propósito: hosts diferentes, sem
-quota de 429 (é CDN estático, não o gateway da API), perfil de timeout
-totalmente distinto (um arquivo de 98 MB legitimamente demora) e concorrência
-baixa.
+Separate module from ``AsyncCamaraClient`` on purpose: different hosts, no
+429 quota (it's a static CDN, not the API gateway), completely different timeout
+profile (a 98 MB file legitimately takes time), and low concurrency.
 
-Motivação: a API v2 é limitada a 10 req/s por IP. Os extractors com fan-out
-N+1 somavam ~157.000 requisições — ~4,4h no melhor caso, impossível dentro do
-orçamento de 600s por task. A própria equipe da Câmara recomenda os arquivos
-bulk para carga em banco. Aqui isso vira algumas dezenas de downloads.
+Motivation: the v2 API is limited to 10 req/s per IP. N+1 fan-out extractors
+summed to ~157,000 requests — ~4.4h best case, impossible within the 600s per-task
+budget. The Câmara team itself recommends bulk files for database loading.
+Here that becomes a few dozen downloads.
 """
 import asyncio
 import csv
@@ -25,28 +24,28 @@ from pathlib import Path
 import aiohttp
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 
-# Sem `total`: um arquivo grande pode legitimamente levar minutos. O que
-# detecta travamento é `sock_read` — silêncio no socket, não duração total.
+# No `total`: a large file may legitimately take minutes. What detects hanging
+# is `sock_read` — silence on the socket, not total duration.
 _BULK_TIMEOUT = aiohttp.ClientTimeout(total=None, connect=30, sock_read=60)
 
 _ARQUIVOS = "https://dadosabertos.camara.leg.br/arquivos"
 _CACHE_DIR = os.getenv("CAMARA_BULK_CACHE", "/tmp/camara_bulk")
-_TTL_SECONDS = int(os.getenv("CAMARA_BULK_TTL_S", 21600))  # 6h; os arquivos são diários
+_TTL_SECONDS = int(os.getenv("CAMARA_BULK_TTL_S", 21600))  # 6h; files are daily
 
-# Um 404 devolve corpo minúsculo; usamos isso para distinguir de arquivo real.
+# A 404 returns a tiny body; we use this to distinguish from a real file.
 _MIN_VALID_BYTES = 1024
 
 
 class BulkNotFound(RuntimeError):
-    """Partição inexistente (ex.: ano futuro)."""
+    """Non-existent partition (e.g., future year)."""
 
 
 class BulkDownloadIncomplete(RuntimeError):
-    """Download truncado — nunca publicar como completo."""
+    """Truncated download — never publish as complete."""
 
 
 class BulkSchemaChanged(RuntimeError):
-    """Coluna esperada sumiu do arquivo upstream."""
+    """Expected column disappeared from upstream file."""
 
 
 @dataclass(frozen=True)
@@ -55,7 +54,7 @@ class DatasetSpec:
     url_template: str
     partition: str  # "ano" | "legislatura" | "none"
     archive: str = None  # None | "zip"
-    encoding: str = "utf-8-sig"  # todos os arquivos vêm com BOM
+    encoding: str = "utf-8-sig"  # All files come with BOM
     delimiter: str = ";"
     required: tuple = field(default=())
 
@@ -63,7 +62,7 @@ class DatasetSpec:
         if self.partition == "none":
             return self.url_template
         if partition is None:
-            raise ValueError(f"dataset '{self.name}' exige partição '{self.partition}'")
+            raise ValueError(f"dataset '{self.name}' requires partition '{self.partition}'")
         key = "ano" if self.partition == "ano" else "legislatura"
         return self.url_template.format(**{key: partition})
 

@@ -1,12 +1,12 @@
-# Runbook: provisionar o ambiente de produção
+# Runbook: Provision the production environment
 
-Este documento é uma checklist manual. **Nada aqui é executado automaticamente pelo CI** — o job `deploy-prod` em `.github/workflows/ci.yml` já está pronto no workflow, mas vai falhar cedo (sem custo) até os passos abaixo serem concluídos: primeiro por falta da secret `AWS_PROD_DEPLOY_ROLE_ARN`, depois (se a role existir mas os recursos não) por falta do cluster/task definition/bucket.
+This document is a manual checklist. **Nothing here runs automatically in CI** — the `deploy-prod` job in `.github/workflows/ci.yml` is ready in the workflow, but will fail early (at no cost) until the steps below are completed: first due to missing the `AWS_PROD_DEPLOY_ROLE_ARN` secret, then (if the role exists but resources don't) due to missing cluster/task definition/bucket.
 
-Rode os comandos abaixo com um usuário/role que já tenha permissão de administrador na conta AWS `904464083417` (região `us-east-1`), revisando cada um antes de rodar.
+Run the commands below with a user/role that already has admin permission in the AWS account `904464083417` (region `us-east-1`), reviewing each one before running.
 
-## 1. OIDC: permitir que o GitHub Actions assuma roles na sua conta
+## 1. OIDC: Allow GitHub Actions to assume roles in your account
 
-Só precisa ser feito **uma vez** por conta AWS (serve tanto para a role de dev quanto a de prod).
+Only needs to be done **once** per AWS account (serves for both dev and prod roles).
 
 ```bash
 aws iam create-open-id-connect-provider \
@@ -15,11 +15,11 @@ aws iam create-open-id-connect-provider \
   --thumbprint-list 6938fd4d98bab03faadb97b34396831e3780aea1
 ```
 
-(O thumbprint acima é o atual da CA raiz usada pelo GitHub; se o comando falhar por thumbprint inválido, pegue o valor atualizado em https://github.blog/changelog — a AWS também aceita validar via `--client-id-list` sozinho em contas mais novas, sem exigir thumbprint correto.)
+(The thumbprint above is the current root CA used by GitHub; if the command fails with an invalid thumbprint, get the updated value at https://github.blog/changelog — AWS also accepts validation via `--client-id-list` alone on newer accounts, without requiring the correct thumbprint.)
 
-## 2. IAM Role para o job `deploy-dev` (se ainda não existir)
+## 2. IAM Role for the `deploy-dev` job (if it doesn't already exist)
 
-Trust policy restrita ao branch `develop` deste repositório:
+Trust policy restricted to the `develop` branch of this repository:
 
 ```json
 {
@@ -42,7 +42,7 @@ Trust policy restrita ao branch `develop` deste repositório:
 }
 ```
 
-Permissão mínima (push no ECR, repo `camara-ingestion`):
+Minimum permission (push to ECR, repo `camara-ingestion`):
 
 ```json
 {
@@ -67,26 +67,26 @@ Permissão mínima (push no ECR, repo `camara-ingestion`):
 }
 ```
 
-Crie a role (`AWS_DEV_DEPLOY_ROLE_ARN`) e salve o ARN resultante como GitHub Secret (Settings → Secrets and variables → Actions → New repository secret).
+Create the role (`AWS_DEV_DEPLOY_ROLE_ARN`) and save the resulting ARN as a GitHub Secret (Settings → Secrets and variables → Actions → New repository secret).
 
-## 3. IAM Role para o job `deploy-prod`
+## 3. IAM Role for the `deploy-prod` job
 
-Igual ao passo 2, mas trocando `ref:refs/heads/develop` por `ref:refs/heads/main` na trust policy. Salve o ARN como o secret `AWS_PROD_DEPLOY_ROLE_ARN`.
+Same as step 2, but replacing `ref:refs/heads/develop` with `ref:refs/heads/main` in the trust policy. Save the ARN as the secret `AWS_PROD_DEPLOY_ROLE_ARN`.
 
-## 4. Cluster ECS de produção
+## 4. Production ECS cluster
 
 ```bash
 aws ecs create-cluster --cluster-name dataplatform-ecs-cluster-prod --region us-east-1
 ```
 
-## 5. Task definition de produção
+## 5. Production task definition
 
-A task definition dev atual (`dataplatform-ingestion-task-dev`) usa:
+The current dev task definition (`dataplatform-ingestion-task-dev`) uses:
 - `executionRoleArn`: `arn:aws:iam::904464083417:role/dataplatform_ecs_task_execution_role_dev`
 - `taskRoleArn`: `arn:aws:iam::904464083417:role/dataplatform_airflow`
 - `cpu: 1024` / `memory: 2048` (Fargate)
 
-Decida se produção reusa essas mesmas IAM roles/tamanho ou se quer roles dedicadas (recomendado para isolamento real, mas não obrigatório para começar). Registre a nova task definition apontando pra imagem `:prod`:
+Decide whether production reuses the same IAM roles/size or wants dedicated roles (recommended for real isolation, but not required to start). Register the new task definition pointing to the `:prod` image:
 
 ```bash
 cat > /tmp/task-def-prod.json <<'EOF'
@@ -118,21 +118,21 @@ aws logs create-log-group --log-group-name /ecs/dataplatform-ingestion-task-prod
 aws ecs register-task-definition --cli-input-json file:///tmp/task-def-prod.json --region us-east-1
 ```
 
-> Se preferir roles isoladas de dev, crie `dataplatform_ecs_task_execution_role_prod` / `dataplatform_airflow_prod` (mesmas policies do dev) e troque os ARNs acima antes de registrar.
+> If you prefer roles isolated from dev, create `dataplatform_ecs_task_execution_role_prod` / `dataplatform_airflow_prod` (same policies as dev) and swap the ARNs above before registering.
 
-## 6. Bucket S3 de produção
+## 6. Production S3 bucket
 
 ```bash
 aws s3 mb s3://dataplatform-camara-prod-db --region us-east-1
 ```
 
-## 7. GitHub: secrets e Environment
+## 7. GitHub: Secrets and Environment
 
-- Settings → Secrets and variables → Actions: adicionar `AWS_DEV_DEPLOY_ROLE_ARN` e `AWS_PROD_DEPLOY_ROLE_ARN` (os ARNs dos passos 2 e 3).
-- Settings → Environments → criar `production`, marcando **Required reviewers** com você mesmo (ou quem revisar deploys) — isso faz o job `deploy-prod` pausar e pedir aprovação manual antes de rodar, mesmo depois de tudo provisionado.
+- Settings → Secrets and variables → Actions: add `AWS_DEV_DEPLOY_ROLE_ARN` and `AWS_PROD_DEPLOY_ROLE_ARN` (the ARNs from steps 2 and 3).
+- Settings → Environments → create `production`, marking **Required reviewers** with yourself (or whoever reviews deploys) — this makes the `deploy-prod` job pause and request manual approval before running, even after everything is provisioned.
 
-## 8. Validar antes de ativar de vez
+## 8. Validate before going live
 
-1. Confirme que `deploy-dev` (branch `develop`) já roda com sucesso publicando `:latest` + `:dev-<sha>` no ECR — isso valida a role/OIDC/paths-filter antes de mexer em produção.
-2. Faça um merge de teste em `main` e confirme que `deploy-prod` builda e publica `:prod` + `:prod-<sha>` sem erro.
-3. Só depois disso, no Airflow, despause manualmente a DAG `camara_ingestion_pipeline_prod` (ela nasce pausada, sem `schedule_interval`) e/ou mude seu `schedule_interval` em `airflow/dags/camera_ingestion_dag.py` de `None` para `"@weekly"` quando quiser que rode automaticamente.
+1. Confirm that `deploy-dev` (branch `develop`) already runs successfully publishing `:latest` + `:dev-<sha>` to ECR — this validates the role/OIDC/paths-filter before touching production.
+2. Do a test merge to `main` and confirm that `deploy-prod` builds and publishes `:prod` + `:prod-<sha>` without error.
+3. Only after that, in Airflow, manually unpause the DAG `camara_ingestion_pipeline_prod` (it is born paused, with no `schedule_interval`) and/or change its `schedule_interval` in `airflow/dags/camera_ingestion_dag.py` from `None` to `"@weekly"` when you want it to run automatically.

@@ -8,62 +8,60 @@ from email.utils import parsedate_to_datetime
 from tenacity import retry, wait_exponential, retry_if_exception_type
 
 
-# Configuração otimizada:
-# - total: 90s para cada requisição individual
-# - connect: 30s para estabelecer conexão
+# Optimized configuration:
+# - total: 90s per individual request
+# - connect: 30s to establish connection
 _TIMEOUT = aiohttp.ClientTimeout(total=90, connect=30)
 
-# Status codes que justificam retry
+# Status codes that warrant retry
 _RETRYABLE_STATUSES = {429, 500, 502, 503, 504}
 
-# A API da Câmara limita a 10 req/s por IP (documentado em
-# github.com/CamaraDosDeputados/dados-abertos/issues/251). Não há API key que
-# aumente esse teto. Ficamos abaixo dele de propósito: medições mostraram que
-# ultrapassar não aumenta throughput — colapsa. Com 2 tasks concorrentes o
-# pipeline rendia 2,04x MENOS que serial, e gastava 6x mais 429s para isso.
+# The Câmara API limits to 10 req/s per IP (documented at
+# github.com/CamaraDosDeputados/dados-abertos/issues/251). No API key increases this ceiling.
+# We stay below it on purpose: measurements showed exceeding it doesn't increase throughput — it collapses.
+# With 2 concurrent tasks the pipeline yielded 2.04x LESS than serial and spent 6x more 429s doing so.
 _RATE_LIMIT_RPS = float(os.getenv("CAMARA_RATE_LIMIT_RPS", 8))
 
-# O rate limiter é quem faz cumprir o contrato da API; o semáforo só evita um
-# número ilimitado de requisições em voo. Para sustentar R req/s com latência
-# L, é preciso concorrência >= R*L — com R=8 e L~2s, um semáforo de 6 vira o
-# gargalo real e segura a taxa em ~3 req/s, sem o limiter sequer atuar.
+# The rate limiter enforces the API contract; the semaphore only prevents unlimited
+# concurrent requests. To sustain R req/s with latency L, concurrency >= R*L is needed —
+# with R=8 and L~2s, a semaphore of 6 becomes the real bottleneck and holds the rate at ~3 req/s,
+# without the limiter even acting.
 _MAX_CONCURRENCY = int(os.getenv("CAMARA_MAX_CONCURRENCY", 16))
 
-# 5xx consecutivos indicam que o backend está descartando carga (a tempestade
-# de 504 em votacoes vinha da nossa própria pressão). Pausa curta para deixar
-# respirar.
+# Consecutive 5xx errors indicate the backend is dropping load (the 504 storm
+# in votacoes came from our own pressure). Brief pause to let it breathe.
 _SERVER_ERROR_TRIP_THRESHOLD = int(os.getenv("CAMARA_5XX_TRIP_THRESHOLD", 5))
 _SERVER_ERROR_TRIP_SECONDS = 5.0
 
-# Teto para a pausa global, evitando que um Retry-After absurdo trave tudo.
+# Ceiling for global pause, preventing an absurd Retry-After from blocking everything.
 _MAX_PAUSE_SECONDS = 45.0
 
 
 class CamaraRateLimitError(aiohttp.ClientError):
-    """Exceção para rate-limit (429) ou respostas com Retry-After."""
+    """Exception for rate-limit (429) or responses with Retry-After."""
     def __init__(self, message: str, retry_after: float = None):
         super().__init__(message)
         self.retry_after = retry_after
 
 
 class CamaraServerError(aiohttp.ClientError):
-    """Exceção para erros de servidor (5xx)."""
+    """Exception for server errors (5xx)."""
     pass
 
 
 def _parse_retry_after(header_value: str = None) -> float:
-    """Parse Retry-After header (seconds as int ou HTTP-date)."""
+    """Parse Retry-After header (seconds as int or HTTP-date)."""
     if not header_value:
         return None
 
     try:
-        # Tenta interpretar como número de segundos
+        # Try to interpret as number of seconds
         return float(header_value)
     except ValueError:
         pass
 
     try:
-        # Tenta interpretar como HTTP-date
+        # Try to interpret as HTTP-date
         dt = parsedate_to_datetime(header_value)
         now = __import__('datetime').datetime.now(__import__('datetime').timezone.utc)
         delta = (dt - now).total_seconds()
@@ -75,38 +73,37 @@ def _parse_retry_after(header_value: str = None) -> float:
 
 
 def _camara_wait(retry_state) -> float:
-    """Backoff local curto, com full jitter.
+    """Short local backoff with full jitter.
 
-    A espera de verdade agora é feita uma única vez, globalmente, pelo
-    CircuitBreaker. Aqui só evitamos que as corrotinas liberadas pelo breaker
-    saiam todas no mesmo instante.
+    The actual waiting is now done once, globally, by the CircuitBreaker.
+    Here we only prevent coroutines released by the breaker from all starting at once.
 
-    Full jitter (`uniform(0, base)`) em vez do antigo `base + uniform(0, 2)`:
-    com janela de 30s e jitter de apenas 2s, todas as corrotinas acordavam
-    dentro da mesma janela de 2 segundos e colidiam de novo — foi o que
-    produziu rajadas de até 108 rejeições consecutivas.
+    Full jitter (`uniform(0, base)`) instead of the old `base + uniform(0, 2)`:
+    with a 30s window and only 2s of jitter, all coroutines would wake within
+    the same 2-second window and collide again — that's what produced bursts
+    of up to 108 consecutive rejections.
     """
     base = wait_exponential(multiplier=1, min=1, max=8)(retry_state)
     return random.uniform(0, base)
 
 
 def _camara_stop(retry_state) -> bool:
-    """Stop strategy com limite diferenciado para rate-limit vs erros de servidor."""
+    """Stop strategy with different limits for rate-limit vs server errors."""
     exc = retry_state.outcome.exception() if retry_state.outcome else None
 
-    # 5 tentativas para rate-limit (esperado sob carga, vale insistir)
-    # 3 tentativas para outros erros (falha real de servidor)
+    # 5 attempts for rate-limit (expected under load, worth persisting)
+    # 3 attempts for other errors (true server failure)
     limit = 5 if isinstance(exc, CamaraRateLimitError) else 3
 
     return retry_state.attempt_number >= limit
 
 
 class RateLimiter:
-    """Token bucket que espaça as requisições no tempo.
+    """Token bucket that spaces requests over time.
 
-    O semáforo limita quantas requisições ficam *em voo*; isto limita a que
-    *taxa* elas partem. Sem o segundo controle, 6 requisições em voo com
-    respostas rápidas ainda estouram os 10 req/s.
+    The semaphore limits how many requests are *in flight*; this limits
+    the *rate* at which they depart. Without this second control, 6 requests in flight
+    with quick responses still exceed the 10 req/s limit.
     """
 
     def __init__(self, rate: float, burst: int = None):
@@ -133,12 +130,12 @@ class RateLimiter:
 
 
 class CircuitBreaker:
-    """Pausa global de todos os workers quando a API sinaliza sobrecarga.
+    """Global pause for all workers when the API signals overload.
 
-    Antes, cada corrotina fazia seu próprio backoff independentemente, e o
-    sleep acontecia *fora* do semáforo — o pool de corrotinas dormindo era
-    ilimitado e todas voltavam juntas. Um 429 vira aqui uma pausa única e
-    compartilhada.
+    Before, each coroutine did its own backoff independently, and the
+    sleep happened *outside* the semaphore — the pool of sleeping coroutines was
+    unlimited and they all returned together. A 429 becomes here a single,
+    shared pause.
     """
 
     def __init__(self):
@@ -157,25 +154,25 @@ class CircuitBreaker:
             await gate.wait()
 
     def trip(self, seconds: float):
-        """Abre o circuito por `seconds`. Só estende, nunca encurta."""
+        """Open the circuit for `seconds`. Only extends, never shortens."""
         gate = self._ensure_gate()
         seconds = min(max(seconds, 0.0), _MAX_PAUSE_SECONDS)
         deadline = time.monotonic() + seconds
 
         if deadline <= self._open_until:
-            return  # já pausado por mais tempo
+            return  # Already paused for longer
         self._open_until = deadline
 
         if gate.is_set():
             gate.clear()
-            asyncio.create_task(self._reopen())  # exatamente um reopener
+            asyncio.create_task(self._reopen())  # Exactly one reopener
 
     async def _reopen(self):
         while True:
             delay = self._open_until - time.monotonic()
             if delay <= 0:
                 break
-            await asyncio.sleep(delay)  # re-checa: trip() pode ter estendido
+            await asyncio.sleep(delay)  # Re-check: trip() may have extended
         self._gate.set()
 
 
@@ -207,8 +204,8 @@ class AsyncCamaraClient:
 
         url = f'{self.url}{endpoint}'
 
-        # Ordem importa: esperar a pausa global ANTES de consumir um token e
-        # ocupar um slot do semáforo, para não segurar capacidade à toa.
+        # Order matters: wait for the global pause BEFORE consuming a token and
+        # occupying a semaphore slot, to avoid holding capacity unnecessarily.
         await self._breaker.wait()
         await self._limiter.acquire()
 
@@ -231,8 +228,8 @@ class AsyncCamaraClient:
                     self._consecutive_server_errors += 1
                     if self._consecutive_server_errors >= _SERVER_ERROR_TRIP_THRESHOLD:
                         print(
-                            f'[client] {self._consecutive_server_errors} erros 5xx consecutivos — '
-                            f'pausando {_SERVER_ERROR_TRIP_SECONDS}s.'
+                            f'[client] {self._consecutive_server_errors} consecutive 5xx errors — '
+                            f'pausing {_SERVER_ERROR_TRIP_SECONDS}s.'
                         )
                         self._breaker.trip(_SERVER_ERROR_TRIP_SECONDS)
                         self._consecutive_server_errors = 0
@@ -252,16 +249,16 @@ class AsyncCamaraClient:
         """
         Fetch all pages of a paginated endpoint using links metadata.
 
-        As páginas são buscadas em blocos em vez de um único gather sobre todas
-        elas: um endpoint com milhares de páginas criava milhares de corrotinas
-        de uma vez, todas competindo pelo mesmo semáforo.
+        Pages are fetched in chunks instead of a single gather over all of them:
+        an endpoint with thousands of pages would create thousands of coroutines
+        at once, all competing for the same semaphore.
 
         Args:
             session: aiohttp ClientSession
             endpoint: API endpoint (e.g., 'deputados')
             params: Query parameters (optional)
             itens: Items per page (default 100)
-            page_chunk: Quantas páginas disparar por vez
+            page_chunk: Number of pages to dispatch at once
 
         Returns:
             Combined list of all records from all pages
