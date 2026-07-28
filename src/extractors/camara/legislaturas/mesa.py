@@ -1,7 +1,6 @@
 from extractors.camara.base import CamaraBaseExtractor
 from utils.concurrency import gather_aligned
 import json
-import asyncio
 import aiohttp
 from datetime import datetime, date
 from utils.utils import add_months

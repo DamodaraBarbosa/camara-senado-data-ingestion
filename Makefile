@@ -41,6 +41,9 @@ help:
 	@echo "Database Commands:"
 	@echo "  make db-shell           - Open PostgreSQL shell"
 	@echo ""
+	@echo "Test Commands:"
+	@echo "  make test               - Run unit tests (pytest)"
+	@echo ""
 	@echo "AWS/ECR Commands:"
 	@echo "  make push-ecr           - Push image to ECR (requires AWS credentials)"
 	@echo "  make login-ecr          - Login to ECR (requires AWS credentials)"
@@ -146,6 +149,10 @@ run-grupos:
 # Database commands
 db-shell:
 	$(COMPOSE) exec postgres psql -U admin -d camara_data
+
+# Tests
+test:
+	PYTHONPATH=src pytest tests/ -v
 
 # AWS/ECR commands
 login-ecr:

@@ -44,12 +44,15 @@ class AsyncTemasExtractor(CamaraBaseExtractor):
                         all_temas.extend(temas_data)
 
                 batch_num = batch_start // batch_size + 1
-                print(f'[temas] Lote {batch_num} concluído: {len(all_temas)} registros (erros: {errors}, vazios: {skipped})')
+                print(
+                    f'[temas] Lote {batch_num} concluído: {len(all_temas)} registros '
+                    f'(erros: {errors}, vazios: {skipped})'
+                )
 
         return all_temas
 
     async def _fetch_temas(self, session, proposicao_id):
         try:
             return await self.client.get(session, self.ENDPOINT.format(id=proposicao_id))
-        except Exception as e:
+        except Exception:
             return None
