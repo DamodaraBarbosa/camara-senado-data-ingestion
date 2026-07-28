@@ -53,7 +53,7 @@ class AsyncMembrosExtractor(CamaraBaseExtractor):
         for legislatura in legislaturas:
             rows = await self.bulk.read_rows(
                 self.DATASET, legislatura,
-                transform=lambda r, l=legislatura: _to_membro(r, l),
+                transform=lambda r, leg=legislatura: _to_membro(r, leg),
             )
             for row in rows:
                 if row["idOrgao"] is None or row["id"] is None:

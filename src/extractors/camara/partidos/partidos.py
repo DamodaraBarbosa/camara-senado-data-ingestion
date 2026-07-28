@@ -45,7 +45,9 @@ class AsyncPartidosExtractor(CamaraBaseExtractor):
             if init_legislatura is not None:
                 params['id'] = init_legislatura
             legislatura = await self.client.get(session, self.LEGISLATURA, params=params)
-            start_legislatura_date = legislatura['dados'][0].get('dataInicio', None) if legislatura.get('dados') else None
+            start_legislatura_date = (
+                legislatura['dados'][0].get('dataInicio', None) if legislatura.get('dados') else None
+            )
             start_legislatura_year = int(start_legislatura_date.split('-')[0]) if start_legislatura_date else None
 
             current_year = datetime.now().year

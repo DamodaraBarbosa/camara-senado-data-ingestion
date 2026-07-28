@@ -1,6 +1,5 @@
 from extractors.camara.base import CamaraBaseExtractor
 from utils.concurrency import gather_aligned
-import asyncio
 import aiohttp
 
 

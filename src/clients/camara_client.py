@@ -5,7 +5,7 @@ import time
 import aiohttp
 from urllib.parse import urlparse, parse_qs
 from email.utils import parsedate_to_datetime
-from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type, RetryError
+from tenacity import retry, wait_exponential, retry_if_exception_type
 
 
 # Configuração otimizada:

@@ -38,19 +38,19 @@ class AsyncProposicoesExtractor(CamaraBaseExtractor):
         Returns:
             List of propositions
         """
-        
+
         timeout = aiohttp.ClientTimeout(total=self.REQUEST_TIMEOUT)
-        
+
         async with aiohttp.ClientSession(timeout=timeout) as session:
             # Determine year range
             if start_year is None:
                 start_year = await self._get_start_year(session, init_legislatura)
-            
+
             current_year = datetime.now().year
             years_range = range(start_year, current_year + 1)
-            
+
             logger.info(f'Extracting propositions from {start_year} to {current_year}')
-            
+
             # Create tasks for each year (parallel execution)
             year_tasks = [
                 self._extract_year(
@@ -64,30 +64,30 @@ class AsyncProposicoesExtractor(CamaraBaseExtractor):
                 )
                 for ano in years_range
             ]
-            
+
             # Execute all year extractions in parallel
             year_results = await asyncio.gather(*year_tasks, return_exceptions=True)
-            
+
             # Aggregate results and handle errors
             all_proposicoes = []
             for ano, result in zip(years_range, year_results):
                 if isinstance(result, Exception):
                     logger.error(f'Error extracting year {ano}: {result}')
                     continue
-                
+
                 all_proposicoes.extend(result)
-            
+
             logger.info(f'Total propositions extracted: {len(all_proposicoes)}')
             return all_proposicoes
 
     async def _get_start_year(self, session: aiohttp.ClientSession, init_legislatura: int = None) -> int:
         """
         Fetch the start year from legislature data.
-        
+
         Args:
             session: aiohttp session
             init_legislatura: Legislature ID
-            
+
         Returns:
             Start year as integer
         """
@@ -95,22 +95,22 @@ class AsyncProposicoesExtractor(CamaraBaseExtractor):
             params = {}
             if init_legislatura is not None:
                 params['id'] = init_legislatura
-            
+
             legislatura = await self.client.get(session, self.LEGISLATURA, params=params)
-            
+
             if not legislatura.get('dados'):
                 logger.warning('No legislature data found, using current year')
                 return datetime.now().year
-            
+
             start_legislatura_date = legislatura['dados'][0].get('dataInicio')
             if not start_legislatura_date:
                 logger.warning('No start date in legislature data, using current year')
                 return datetime.now().year
-            
+
             start_year = int(start_legislatura_date.split('-')[0])
             logger.info(f'Legislature start year: {start_year}')
             return start_year
-            
+
         except Exception as e:
             logger.error(f'Error fetching legislature: {e}, using current year')
             return datetime.now().year

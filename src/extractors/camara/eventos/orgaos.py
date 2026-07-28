@@ -1,7 +1,6 @@
 from extractors.camara.base import CamaraBaseExtractor
 from utils.concurrency import gather_aligned
 import aiohttp
-import asyncio
 
 
 class AsyncEventosOrgaosExtractor(CamaraBaseExtractor):

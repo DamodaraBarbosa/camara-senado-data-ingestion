@@ -2,7 +2,7 @@ from extractors.camara.base import CamaraBaseExtractor
 import aiohttp
 import json
 
-from utils.bulk import intern_str, nullify, to_int
+from utils.bulk import intern_str, nullify
 from utils.periods import resolve_years
 
 

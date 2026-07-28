@@ -1,6 +1,5 @@
 from extractors.camara.base import CamaraBaseExtractor
 from utils.concurrency import gather_aligned
-import asyncio
 import json
 import aiohttp
 
@@ -19,11 +18,16 @@ class AsyncOrgaosExtractor(CamaraBaseExtractor):
             if init_legislatura is not None:
                 params['id'] = init_legislatura
             legislatura = await self.client.get(session, 'legislaturas', params=params)
-            start_legislatura_date = legislatura['dados'][0].get('dataInicio', None) if legislatura.get('dados') else None
+            start_legislatura_date = (
+                legislatura['dados'][0].get('dataInicio', None) if legislatura.get('dados') else None
+            )
 
             deputados_ids = list(dict.fromkeys(deputado.get('id') for deputado in deputados if deputado.get('id')))
 
-            print(f'[orgaos] Iniciando extração para {len(deputados_ids)} deputados | data início legislatura: {start_legislatura_date}')
+            print(
+                f'[orgaos] Iniciando extração para {len(deputados_ids)} deputados | '
+                f'data início legislatura: {start_legislatura_date}'
+            )
 
             tasks = [
                 self._fetch_deputado(session, deputado_id, start_legislatura_date, items)

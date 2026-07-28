@@ -1,7 +1,6 @@
 from extractors.camara.base import CamaraBaseExtractor
 from utils.concurrency import gather_aligned
 import json
-import asyncio
 import aiohttp
 
 
@@ -24,7 +23,10 @@ class AsyncDiscursosExtractor(CamaraBaseExtractor):
 
             deputados_ids = list(dict.fromkeys(deputado.get('id') for deputado in deputados if deputado.get('id')))
 
-            print(f'[discursos] Iniciando extração | {len(deputados_ids)} deputados | legislaturas: {legislaturas_range}')
+            print(
+                f'[discursos] Iniciando extração | {len(deputados_ids)} deputados | '
+                f'legislaturas: {legislaturas_range}'
+            )
 
             tasks = [
                 self._fetch_deputado(session, deputado_id, legislatura_id, items)
@@ -55,4 +57,4 @@ class AsyncDiscursosExtractor(CamaraBaseExtractor):
         return discursos
 
         print(f'[discursos] Concluído deputado {deputado_id} | total de discursos: {len(discursos)}')
-        return discursos                          
+        return discursos

@@ -20,7 +20,6 @@ Aqui o caminho de cache é sempre canônico e derivado de
 S3 write via multipart upload: `_write_s3` agora aceita geradores assíncrono/
 síncrono e streaming para S3 sem materializar o JSON inteiro em memória.
 """
-import asyncio
 import inspect
 import json
 import os
