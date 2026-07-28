@@ -99,5 +99,5 @@ def test_dataset_url_construction():
 
 
 def test_partitioned_dataset_requires_partition():
-    with pytest.raises(ValueError, match="partição"):
+    with pytest.raises(ValueError, match="partition"):
         DATASETS["votacoes"].url()

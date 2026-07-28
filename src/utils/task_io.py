@@ -1,24 +1,23 @@
-"""I/O de dependências e de saída — fonte única de verdade para os 10 runners.
+"""Dependency and output I/O — single source of truth for the 10 runners.
 
-Substitui ``_read_dependency_output``/``_write_output`` duplicados (e
-divergentes) em ``bundles/*/app/runner.py``. Duas divergências causavam bugs
-reais:
+Replaces duplicated (and divergent) ``_read_dependency_output``/``_write_output``
+across ``bundles/*/app/runner.py``. Two divergences caused real bugs:
 
-1. **Mismatch de run_id.** 6 runners (eventos, frentes, grupos, legislaturas,
-   orgaos, partidos) gravavam ``{nome}.json`` mas liam
-   ``{nome}_{run_id}.json`` — o cache errava 100% das vezes, e cada task
-   dependente re-extraía o upstream inteiro. Eram 21 misses por execução,
-   desperdiçando quota de uma API limitada a 10 req/s.
+1. **run_id mismatch.** 6 runners (eventos, frentes, grupos, legislaturas,
+   orgaos, partidos) wrote ``{nome}.json`` but read
+   ``{nome}_{run_id}.json`` — cache failed 100% of the time, and each
+   downstream task re-extracted the entire upstream. That was 21 misses per run,
+   wasting quota on a 10 req/s-limited API.
 
-2. **Reuso de ``destination["path"]``.** 8 leitores usavam o ``path`` da task
-   *corrente* como caminho da *dependência*. Não dispara hoje só porque o
-   orquestrador omite ``path``, mas é uma armadilha latente.
+2. **destination["path"] reuse.** 8 readers used the *current* task's ``path``
+   as the *dependency* path. Doesn't trigger today only because the orchestrator
+   omits ``path``, but it's a latent trap.
 
-Aqui o caminho de cache é sempre canônico e derivado de
-``(bundle, nome, run_id)`` — nunca de ``destination["path"]``.
+Here the cache path is always canonical and derived from
+``(bundle, nome, run_id)`` — never from ``destination["path"]``.
 
-S3 write via multipart upload: `_write_s3` agora aceita geradores assíncrono/
-síncrono e streaming para S3 sem materializar o JSON inteiro em memória.
+S3 write via multipart upload: `_write_s3` now accepts async/sync generators
+and streams to S3 without materializing the entire JSON in memory.
 """
 import inspect
 import json
@@ -27,25 +26,25 @@ from pathlib import Path
 
 _S3_UPLOAD_PART_BYTES = int(os.getenv("S3_UPLOAD_PART_BYTES", 8 << 20))  # 8 MB
 
-# Cache miss levanta erro em vez de recomputar silenciosamente. A recomputação
-# silenciosa é justamente o que queimava quota sem ninguém perceber.
+# Cache miss raises error instead of silently recomputing. Silent recomputation
+# is exactly what was burning quota without anyone noticing.
 STRICT_DEPENDENCY_CACHE = os.getenv("STRICT_DEPENDENCY_CACHE", "1") not in ("0", "false", "False")
 
 DEFAULT_CACHE_DIR = os.getenv("CAMARA_CACHE_DIR", "/tmp")
 
 
 class DependencyCacheMiss(RuntimeError):
-    """Dependência ausente do cache com STRICT_DEPENDENCY_CACHE ligado."""
+    """Missing dependency from cache with STRICT_DEPENDENCY_CACHE enabled."""
 
 
 def cache_path(bundle: str, name: str, run_id: str, cache_dir: str = None) -> Path:
-    """Caminho canônico de cache. Sempre namespaced por run_id."""
+    """Canonical cache path. Always namespaced by run_id."""
     base = Path(cache_dir or DEFAULT_CACHE_DIR)
     return base / bundle / f"{name}_{run_id}.json"
 
 
 def s3_key(bundle: str, name: str, run_id: str) -> str:
-    """Chave canônica no S3, espelhando o prefixo que o DAG monta."""
+    """Canonical S3 key, mirroring the prefix the DAG builds."""
     return f"raw/{bundle}/{name}/{name}_{run_id}.json"
 
 

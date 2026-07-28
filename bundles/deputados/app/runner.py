@@ -65,24 +65,23 @@ DEPENDENCIES = {
 }
 
 
-# despesas baixa e faz parse de vários anos de CEAP (~750k linhas). O parse
-# (CPU-bound, single-thread) roda muito mais devagar no vCPU do Fargate do
-# que num dev laptop, com bastante variância de rede (retries/resumes
-# observados) — mesmo 1800s não foi suficiente num teste real, por isso a
-# margem ampla.
+# despesas downloads and parses multiple years of CEAP (~750k lines). Parsing
+# (CPU-bound, single-threaded) runs much slower on Fargate vCPU than on a dev
+# laptop, with considerable network variance (retries/resumes observed) —
+# even 1800s wasn't sufficient in real testing, so the wide margin.
 _TIMEOUT_OVERRIDES = {"despesas": 3600}
 _DEFAULT_TIMEOUT = 600
 
 
 def handler(event: dict, context=None):
-    """Main handler with timeout protection (10 min max per extraction, configurável por extractor)."""
+    """Main handler with timeout protection (10 min max per extraction, configurable per extractor)."""
     timeout = _TIMEOUT_OVERRIDES.get(event.get("extractor"), _DEFAULT_TIMEOUT)
     try:
         return asyncio.run(
             asyncio.wait_for(_run(event), timeout=timeout)
         )
     except asyncio.TimeoutError:
-        print(f"[ERROR] Extração excedeu timeout de {timeout // 60} minutos. Falhando para retry do Airflow.")
+        print(f"[ERROR] Extraction timeout exceeded {timeout // 60} minutes. Failing for Airflow retry.")
         raise TimeoutError(f"Extraction timeout exceeded {timeout} seconds") from None
 
 
@@ -125,9 +124,9 @@ async def _run(event: dict):
                 **{k: v for k, v in params.items()
                    if k in dep_cls.extract.__code__.co_varnames}
             )
-            # Nota: se um extractor-dependência virar gerador assíncrono no futuro,
-            # descomente o .isasyncgen check abaixo. Hoje nenhum extractors em
-            # DEPENDENCIES retorna gerador.
+            # Note: if a dependency extractor becomes an async generator in the future,
+            # uncomment the .isasyncgen check below. Currently no extractors in
+            # DEPENDENCIES return a generator.
             dep_data = await dep_result
             resolved_params[param_name] = dep_data
             print(
@@ -139,7 +138,7 @@ async def _run(event: dict):
     filtered_params = {k: v for k, v in resolved_params.items() if k in sig.parameters or any(p.kind == inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values())}
     extractor_instance = extractor_cls(client)
     result = extractor_instance.extract(**filtered_params)
-    # Alguns extractors (ex: despesas) retornam geradores assíncrono para streaming
+    # Some extractors (e.g., despesas) return async generators for streaming
     data = result if inspect.isasyncgen(result) else await result
 
     records = await write_output(data, destination, bundle_name, extractor_name, run_id)
@@ -176,7 +175,7 @@ if __name__ == "__main__":
                 event = json.load(f)
         except FileNotFoundError:
             print(f"[WARNING] Event file '{event_path}' not found. Using default empty event.")
-            # Fallback padrão seguro para testes locais ou produção sem parâmetros
+            # Safe default fallback for local tests or production without parameters
             event = {
                 "extractor": "deputados",
                 "params": {},

@@ -1,8 +1,8 @@
-# CLAUDE.md — Padrões de Código e Arquitetura
+# CLAUDE.md — Code Patterns and Architecture
 
-Documento de referência para otimizar o trabalho futuro neste repositório. Descreve a estrutura, convenções e padrões implementados.
+Reference document to optimize future work in this repository. Describes structure, conventions, and implemented patterns.
 
-## Estrutura do Projeto
+## Project Structure
 
 ```
 .
@@ -47,9 +47,9 @@ Documento de referência para otimizar o trabalho futuro neste repositório. Des
 └── pytest.ini                   # asyncio_mode=auto for async tests
 ```
 
-## Padrões de Código
+## Code Patterns
 
-### 1. Extractores (Assíncrono)
+### 1. Extractors (Asynchronous)
 
 Todos os extractores herdam de `CamaraBaseExtractor`:
 
@@ -328,10 +328,10 @@ refactor: {short description}
 Co-Authored-By: Claude Haiku 4.5 <noreply@anthropic.com>
 ```
 
-Examples:
-- `feat: adicionar extrator despesas com streaming multipart S3`
-- `fix: corrigir timeout de 10min para 30min em despesas`
-- `chore: remover dependencia requests nao utilizada`
+Examples (commits must be in English):
+- `feat: add despesas extractor with multipart S3 streaming`
+- `fix: increase timeout from 10m to 30m in despesas`
+- `chore: remove unused requests dependency`
 
 ## Environment Variables & Configuration
 

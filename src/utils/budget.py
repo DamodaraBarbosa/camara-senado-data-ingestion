@@ -1,33 +1,32 @@
-"""Orçamento de tempo compartilhado entre extractors.
+"""Shared time budget across extractors.
 
-O runner envolve cada extração em ``asyncio.wait_for(..., timeout=600)``. Se um
-extractor consumir os 600s inteiros, o ``TimeoutError`` mata o processo e
-*todo* o trabalho já feito é perdido (foi o que aconteceu com
-``votacoes/votacoes``: 601s, zero registros salvos).
+The runner wraps each extraction in ``asyncio.wait_for(..., timeout=600)``. If an
+extractor consumes all 600s, the ``TimeoutError`` kills the process and
+*all* work already done is lost (that's what happened with
+``votacoes/votacoes``: 601s, zero records saved).
 
-Por isso os extractors trabalham contra um orçamento menor, devolvendo dados
-parciais antes do limite duro. O valor vivia copiado como ``540`` em 10
-arquivos; 540s deixava apenas 60s de margem, insuficiente quando um único lote
-estoura. 480s dá 120s reais de folga.
+So extractors work against a smaller budget, returning partial data before the hard limit.
+The value used to be copied as ``540`` across 10 files; 540s left only 60s margin,
+insufficient when a single batch overruns. 480s gives 120s real buffer.
 """
 import os
 import time
 
-# Limite duro do handler (asyncio.wait_for nos runners).
+# Hard limit of the handler (asyncio.wait_for in runners).
 HARD_TIMEOUT_S = 600
 
-# Orçamento dos extractors, com margem para escrever a saída antes do limite duro.
+# Extractor budget, with margin to write output before the hard limit.
 TASK_BUDGET_S = float(os.getenv("CAMARA_TASK_BUDGET_S", 480))
 
-# Mínimo de checagens de orçamento por extração. O ``batch_size`` é reduzido até
-# caber esta quantidade de lotes, garantindo que a checagem nunca vire código
-# morto — o bug de ``votacoes/votacoes``, onde batch_size=50 sobre 14 períodos
-# produzia uma única iteração e a checagem rodava uma vez com elapsed~=0.
+# Minimum budget checks per extraction. The ``batch_size`` is reduced to fit
+# this many batches, ensuring the check never becomes dead code — the bug in
+# ``votacoes/votacoes``, where batch_size=50 over 14 periods produced a single
+# iteration and the check ran once with elapsed~=0.
 MIN_CHECKPOINTS = 4
 
 
 class Deadline:
-    """Prazo monotônico para uma extração."""
+    """Monotonic deadline for an extraction."""
 
     def __init__(self, budget_s: float = None):
         self.budget_s = TASK_BUDGET_S if budget_s is None else budget_s

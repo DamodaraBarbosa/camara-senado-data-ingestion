@@ -47,10 +47,10 @@ def handler(event: dict, context=None):
     """Main handler with timeout protection (10 min max per extraction)."""
     try:
         return asyncio.run(
-            asyncio.wait_for(_run(event), timeout=600)  # 10 minutos = 600s
+            asyncio.wait_for(_run(event), timeout=600)  # 10 minutes = 600s
         )
     except asyncio.TimeoutError:
-        print("[ERROR] Extração excedeu timeout de 10 minutos. Falhando para retry do Airflow.")
+        print("[ERROR] Extraction timeout exceeded 10 minutes. Failing for Airflow retry.")
         raise TimeoutError("Extraction timeout exceeded 10 minutes") from None
 
 
