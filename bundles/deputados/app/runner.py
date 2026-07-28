@@ -65,15 +65,25 @@ DEPENDENCIES = {
 }
 
 
+# despesas baixa e faz parse de vários anos de CEAP (~750k linhas). O parse
+# (CPU-bound, single-thread) roda muito mais devagar no vCPU do Fargate do
+# que num dev laptop, com bastante variância de rede (retries/resumes
+# observados) — mesmo 1800s não foi suficiente num teste real, por isso a
+# margem ampla.
+_TIMEOUT_OVERRIDES = {"despesas": 3600}
+_DEFAULT_TIMEOUT = 600
+
+
 def handler(event: dict, context=None):
-    """Main handler with timeout protection (10 min max per extraction)."""
+    """Main handler with timeout protection (10 min max per extraction, configurável por extractor)."""
+    timeout = _TIMEOUT_OVERRIDES.get(event.get("extractor"), _DEFAULT_TIMEOUT)
     try:
         return asyncio.run(
-            asyncio.wait_for(_run(event), timeout=600)  # 10 minutos = 600s
+            asyncio.wait_for(_run(event), timeout=timeout)
         )
     except asyncio.TimeoutError:
-        print("[ERROR] Extração excedeu timeout de 10 minutos. Falhando para retry do Airflow.")
-        raise TimeoutError("Extraction timeout exceeded 10 minutes") from None
+        print(f"[ERROR] Extração excedeu timeout de {timeout // 60} minutos. Falhando para retry do Airflow.")
+        raise TimeoutError(f"Extraction timeout exceeded {timeout} seconds") from None
 
 
 async def _run(event: dict):
@@ -111,10 +121,14 @@ async def _run(event: dict):
 
             # Fall back to recomputation
             dep_cls = EXTRACTORS[dep_extractor_name]
-            dep_data = await dep_cls(client).extract(
+            dep_result = dep_cls(client).extract(
                 **{k: v for k, v in params.items()
                    if k in dep_cls.extract.__code__.co_varnames}
             )
+            # Nota: se um extractor-dependência virar gerador assíncrono no futuro,
+            # descomente o .isasyncgen check abaixo. Hoje nenhum extractors em
+            # DEPENDENCIES retorna gerador.
+            dep_data = await dep_result
             resolved_params[param_name] = dep_data
             print(
                 f"[runner] Dependency '{param_name}' resolved: {len(dep_data)} records."
@@ -124,9 +138,11 @@ async def _run(event: dict):
     sig = inspect.signature(extractor_cls.extract)
     filtered_params = {k: v for k, v in resolved_params.items() if k in sig.parameters or any(p.kind == inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values())}
     extractor_instance = extractor_cls(client)
-    data = await extractor_instance.extract(**filtered_params)
+    result = extractor_instance.extract(**filtered_params)
+    # Alguns extractors (ex: despesas) retornam geradores assíncrono para streaming
+    data = result if inspect.isasyncgen(result) else await result
 
-    records = write_output(data, destination, bundle_name, extractor_name, run_id)
+    records = await write_output(data, destination, bundle_name, extractor_name, run_id)
 
     # Check if extraction was partial (timeout or budget exhaustion)
     status = "partial" if getattr(extractor_instance, "partial", False) else "success"

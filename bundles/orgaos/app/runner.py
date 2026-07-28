@@ -105,7 +105,7 @@ async def _run(event: dict):
     extractor_instance = extractor_cls(client)
     data = await extractor_instance.extract(**filtered_params)
 
-    records = write_output(data, destination, bundle_name, extractor_name, run_id)
+    records = await write_output(data, destination, bundle_name, extractor_name, run_id)
 
     # Check if extraction was partial (timeout or budget exhaustion)
     status = "partial" if getattr(extractor_instance, "partial", False) else "success"

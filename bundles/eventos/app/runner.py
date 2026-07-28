@@ -103,7 +103,7 @@ async def _run(event: dict):
     filtered_params = {k: v for k, v in resolved_params.items() if k in sig.parameters or any(p.kind == inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values())}
     data = await extractor_cls(client).extract(**filtered_params)
 
-    records = write_output(data, destination, bundle_name, extractor_name, run_id)
+    records = await write_output(data, destination, bundle_name, extractor_name, run_id)
 
     return {
         "run_id": run_id,
