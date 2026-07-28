@@ -1,4 +1,5 @@
 from extractors.camara.base import CamaraBaseExtractor
+import asyncio
 import aiohttp
 import json
 
@@ -46,22 +47,32 @@ class AsyncDespesasExtractor(CamaraBaseExtractor):
         years = await self.bulk.available_partitions(self.DATASET, years)
 
         mes = str(int(month)) if month is not None else None
+        row_filter = (lambda r: r.get("numMes") == mes) if mes else None
 
-        all_despesas = []
+        # Downloads dos anos em paralelo (I/O, memória desprezível — o
+        # CamaraBulkClient já limita a 3 simultâneos via semáforo próprio):
+        # em série, um único ano com download lento consome sozinho o
+        # orçamento de tempo da task inteira.
+        await asyncio.gather(*(self.bulk.ensure_file(self.DATASET, ano) for ano in years))
+
+        # Parse e yield permanecem um ano por vez (generator): os arquivos já
+        # estão em cache local nesse ponto, então isso é rápido, e mantém o
+        # pico de memória em O(1 ano) em vez de O(N anos) — parsear todos os
+        # anos em paralelo (como os downloads) multiplicaria o pico de memória
+        # por N e foi o que causou OOM num teste anterior.
+        sem_deputado = 0
         for ano in years:
             rows = await self.bulk.read_rows(
-                self.DATASET, ano,
-                transform=_to_despesa,
-                row_filter=(lambda r: r.get("numMes") == mes) if mes else None,
+                self.DATASET, ano, transform=_to_despesa, row_filter=row_filter,
             )
-            all_despesas.extend(rows)
-            print(f"[despesas] {ano}: {len(rows)} registros (total {len(all_despesas)})")
-
-        sem_deputado = sum(1 for d in all_despesas if d["deputadoId"] is None)
+            print(f"[despesas] {ano}: {len(rows)} registros")
+            for row in rows:
+                if row["deputadoId"] is None:
+                    sem_deputado += 1
+                yield row
         if sem_deputado:
             print(f"[despesas] {sem_deputado} registro(s) de liderança/bancada "
                   "(sem ideCadastro) incluídos.")
-        return all_despesas
 
 
 def _to_despesa(row: dict) -> dict:

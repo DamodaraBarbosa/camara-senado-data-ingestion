@@ -16,10 +16,17 @@ reais:
 
 Aqui o caminho de cache é sempre canônico e derivado de
 ``(bundle, nome, run_id)`` — nunca de ``destination["path"]``.
+
+S3 write via multipart upload: `_write_s3` agora aceita geradores assíncrono/
+síncrono e streaming para S3 sem materializar o JSON inteiro em memória.
 """
+import asyncio
+import inspect
 import json
 import os
 from pathlib import Path
+
+_S3_UPLOAD_PART_BYTES = int(os.getenv("S3_UPLOAD_PART_BYTES", 8 << 20))  # 8 MB
 
 # Cache miss levanta erro em vez de recomputar silenciosamente. A recomputação
 # silenciosa é justamente o que queimava quota sem ninguém perceber.
@@ -80,7 +87,7 @@ def read_dependency(destination: dict, bundle: str, name: str, run_id: str):
         return None
 
 
-def write_output(data, destination: dict, bundle: str, name: str, run_id: str) -> int:
+async def write_output(data, destination: dict, bundle: str, name: str, run_id: str) -> int:
     """Grava a saída no cache canônico e, se pedido, no path explícito.
 
     Grava sempre no caminho canônico (para os dependentes encontrarem) e
@@ -88,7 +95,7 @@ def write_output(data, destination: dict, bundle: str, name: str, run_id: str) -
     — sem que isso contamine a chave de cache.
 
     Args:
-        data: lista de registros, ou qualquer iterável (streaming).
+        data: lista de registros, gerador síncrono, ou gerador assíncrono (streaming).
 
     Returns:
         Número de registros gravados.
@@ -97,54 +104,102 @@ def write_output(data, destination: dict, bundle: str, name: str, run_id: str) -
     dest_type = destination.get("type", "local")
 
     if dest_type == "s3":
-        return _write_s3(data, destination, bundle, name, run_id)
+        return await _write_s3(data, destination, bundle, name, run_id)
     if dest_type == "local":
-        return _write_local(data, destination, bundle, name, run_id)
+        return await _write_local(data, destination, bundle, name, run_id)
     raise ValueError(f"Tipo de destino desconhecido: {dest_type}")
 
 
-def _write_local(data, destination: dict, bundle: str, name: str, run_id: str) -> int:
+async def _write_local(data, destination: dict, bundle: str, name: str, run_id: str) -> int:
     canonical = cache_path(bundle, name, run_id, destination.get("cache_dir"))
-    count = _dump_json(data, canonical)
+    count = await _dump_json(data, canonical)
     print(f"[runner] {count} registros gravados em {canonical}")
 
     explicit = destination.get("path")
     if explicit and Path(explicit) != canonical:
         # Relê o canônico em vez de reconsumir `data`, que pode ser um iterador.
         with open(canonical, "r", encoding="utf-8") as fh:
-            _dump_json(json.load(fh), Path(explicit))
+            await _dump_json(json.load(fh), Path(explicit))
         print(f"[runner] cópia adicional em {explicit}")
 
     return count
 
 
-def _write_s3(data, destination: dict, bundle: str, name: str, run_id: str) -> int:
+async def _write_s3(data, destination: dict, bundle: str, name: str, run_id: str) -> int:
     import boto3
 
     bucket = destination.get("bucket")
     key = s3_key(bundle, name, run_id)
+    s3 = boto3.client("s3")
 
-    records = data if isinstance(data, list) else list(data)
-    body = json.dumps(records, ensure_ascii=False).encode("utf-8")
+    mpu = s3.create_multipart_upload(Bucket=bucket, Key=key, ContentType="application/json")
+    upload_id = mpu["UploadId"]
+    parts = []
+    count = 0
+    buffer = ""
+    part_number = 1
 
-    boto3.client("s3").put_object(
-        Bucket=bucket, Key=key, Body=body, ContentType="application/json"
-    )
-    print(f"[runner] {len(records)} registros gravados em s3://{bucket}/{key}")
+    try:
+        async for record in _to_async_iter(data):
+            json_str = json.dumps(record, ensure_ascii=False)
+            if count == 0:
+                buffer = "[\n  " + json_str
+            else:
+                buffer += ",\n  " + json_str
+            count += 1
 
-    explicit_prefix = destination.get("prefix")
-    if explicit_prefix:
-        alt_key = f"{explicit_prefix.rstrip('/')}/{name}_{run_id}.json"
-        if alt_key != key:
-            boto3.client("s3").put_object(
-                Bucket=bucket, Key=alt_key, Body=body, ContentType="application/json"
+            if len(buffer.encode("utf-8")) > _S3_UPLOAD_PART_BYTES:
+                part_data = buffer.encode("utf-8")
+                part_response = s3.upload_part(
+                    Bucket=bucket, Key=key, UploadId=upload_id,
+                    PartNumber=part_number, Body=part_data
+                )
+                parts.append({
+                    "ETag": part_response["ETag"],
+                    "PartNumber": part_number
+                })
+                part_number += 1
+                buffer = ""
+
+        if buffer or count == 0:
+            if count > 0:
+                buffer += "\n]"
+            else:
+                buffer = "[]"
+            part_data = buffer.encode("utf-8")
+            part_response = s3.upload_part(
+                Bucket=bucket, Key=key, UploadId=upload_id,
+                PartNumber=part_number, Body=part_data
             )
-            print(f"[runner] cópia adicional em s3://{bucket}/{alt_key}")
+            parts.append({
+                "ETag": part_response["ETag"],
+                "PartNumber": part_number
+            })
 
-    return len(records)
+        s3.complete_multipart_upload(
+            Bucket=bucket, Key=key, UploadId=upload_id,
+            MultipartUpload={"Parts": parts}
+        )
+        print(f"[runner] {count} registros gravados em s3://{bucket}/{key} ({len(parts)} partes)")
+
+        explicit_prefix = destination.get("prefix")
+        if explicit_prefix:
+            alt_key = f"{explicit_prefix.rstrip('/')}/{name}_{run_id}.json"
+            if alt_key != key:
+                s3.copy_object(
+                    CopySource={"Bucket": bucket, "Key": key},
+                    Bucket=bucket, Key=alt_key
+                )
+                print(f"[runner] cópia adicional em s3://{bucket}/{alt_key}")
+
+        return count
+
+    except Exception:
+        s3.abort_multipart_upload(Bucket=bucket, Key=key, UploadId=upload_id)
+        raise
 
 
-def _dump_json(data, path: Path) -> int:
+async def _dump_json(data, path: Path) -> int:
     """Serializa registro a registro, sem materializar o JSON inteiro em memória.
 
     ``json.dumps(lista, indent=2)`` constrói uma segunda cópia integral em
@@ -157,7 +212,7 @@ def _dump_json(data, path: Path) -> int:
     count = 0
     with open(tmp, "w", encoding="utf-8") as fh:
         fh.write("[")
-        for record in data:
+        async for record in _to_async_iter(data):
             fh.write("\n  " if count == 0 else ",\n  ")
             fh.write(json.dumps(record, ensure_ascii=False))
             count += 1
@@ -165,3 +220,19 @@ def _dump_json(data, path: Path) -> int:
 
     os.replace(tmp, path)  # publicação atômica: leitor nunca vê arquivo parcial
     return count
+
+
+async def _to_async_iter(data):
+    """Normaliza lista/gerador síncrono/gerador assíncrono num async for."""
+    if inspect.isasyncgen(data):
+        async for item in data:
+            yield item
+    elif inspect.isgenerator(data):
+        for item in data:
+            yield item
+    elif isinstance(data, list):
+        for item in data:
+            yield item
+    else:
+        for item in data:
+            yield item
