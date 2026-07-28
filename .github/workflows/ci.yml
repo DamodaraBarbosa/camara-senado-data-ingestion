@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [main, master]
+    branches: [main, master, develop]
   pull_request:
-    branches: [main, master]
+    branches: [main, master, develop]
 
 jobs:
   lint:
@@ -21,7 +21,7 @@ jobs:
           python-version: "3.12"
 
       - name: Install lint dependencies
-        run: pip install flake8
+        run: pip install -r requirements-dev.txt
 
       - name: Run flake8
         run: flake8 src/ --max-line-length=120 --exclude=src/*/__pycache__
@@ -47,15 +47,116 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
+          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt', 'requirements-dev.txt') }}
           restore-keys: |
             ${{ runner.os }}-pip-
 
       - name: Install dependencies
-        run: pip install -r requirements.txt pytest pytest-asyncio
+        run: pip install -r requirements.txt -r requirements-dev.txt
 
       - name: Run tests
         env:
           PYTHONPATH: src
         run: pytest tests/ -v
         continue-on-error: false
+
+  deploy-dev:
+    name: Deploy (dev)
+    needs: [lint, test]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Check for deploy-relevant changes
+        uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            deploy:
+              - 'bundles/**'
+              - 'src/**'
+              - 'Dockerfile'
+              - 'requirements.txt'
+
+      - name: Configure AWS credentials (OIDC)
+        if: steps.filter.outputs.deploy == 'true'
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEV_DEPLOY_ROLE_ARN }}
+          aws-region: us-east-1
+
+      - name: Login to ECR
+        if: steps.filter.outputs.deploy == 'true'
+        id: ecr-login
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build, tag, and push image
+        if: steps.filter.outputs.deploy == 'true'
+        env:
+          ECR_REGISTRY: ${{ steps.ecr-login.outputs.registry }}
+          IMAGE_REPO: camara-ingestion
+        run: |
+          SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-8)
+          docker build \
+            -t "$ECR_REGISTRY/$IMAGE_REPO:latest" \
+            -t "$ECR_REGISTRY/$IMAGE_REPO:dev-$SHORT_SHA" \
+            .
+          docker push "$ECR_REGISTRY/$IMAGE_REPO:latest"
+          docker push "$ECR_REGISTRY/$IMAGE_REPO:dev-$SHORT_SHA"
+
+  deploy-prod:
+    name: Deploy (production)
+    needs: [lint, test]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Check for deploy-relevant changes
+        uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            deploy:
+              - 'bundles/**'
+              - 'src/**'
+              - 'Dockerfile'
+              - 'requirements.txt'
+
+      - name: Configure AWS credentials (OIDC)
+        if: steps.filter.outputs.deploy == 'true'
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_PROD_DEPLOY_ROLE_ARN }}
+          aws-region: us-east-1
+
+      - name: Login to ECR
+        if: steps.filter.outputs.deploy == 'true'
+        id: ecr-login
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build, tag, and push image
+        if: steps.filter.outputs.deploy == 'true'
+        env:
+          ECR_REGISTRY: ${{ steps.ecr-login.outputs.registry }}
+          IMAGE_REPO: camara-ingestion
+        run: |
+          SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-8)
+          docker build \
+            -t "$ECR_REGISTRY/$IMAGE_REPO:prod" \
+            -t "$ECR_REGISTRY/$IMAGE_REPO:prod-$SHORT_SHA" \
+            .
+          docker push "$ECR_REGISTRY/$IMAGE_REPO:prod"
+          docker push "$ECR_REGISTRY/$IMAGE_REPO:prod-$SHORT_SHA"
