@@ -114,20 +114,25 @@ def build_dag(dag_id: str, config_path: Path, s3_bucket: str, schedule_interval)
 
 
 # Ambiente dev: mesmo dag_id de sempre, preserva o histórico de execuções já
-# existente no Airflow. Continua agendada semanalmente, como já era.
+# existente no Airflow. Sem agendamento automático — dev é usado para testes
+# pontuais, então só deve rodar quando disparada manualmente.
 camara_ingestion_pipeline = build_dag(
     dag_id="camara_ingestion_pipeline",
     config_path=CONFIG_DIR / "bundles_config.dev.json",
     s3_bucket="dataplatform-camara-dev-db",
-    schedule_interval="@weekly",
+    schedule_interval=None,
 )
 
-# Ambiente prod: nova DAG, sem agendamento automático até a infraestrutura de
-# produção (cluster ECS, task definition, bucket S3 — ver
+# Ambiente prod: roda uma vez por semana, domingo às 06:00 UTC (03:00 BRT).
+# Esse horário fecha a semana legislativa completa (sessões costumam ser
+# terça-quinta) e roda em baixo tráfego externo, o que reduz retries nas APIs
+# da Câmara/Senado e, consequentemente, o tempo faturável no Fargate. A DAG
+# nasce pausada (AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION=true) até a
+# infraestrutura de produção (cluster ECS, task definition, bucket S3 — ver
 # docs/PROD_DEPLOY_RUNBOOK.md) existir e ser validada manualmente.
 camara_ingestion_pipeline_prod = build_dag(
     dag_id="camara_ingestion_pipeline_prod",
     config_path=CONFIG_DIR / "bundles_config.prod.json",
     s3_bucket="dataplatform-camara-prod-db",
-    schedule_interval=None,
+    schedule_interval="0 6 * * 0",
 )

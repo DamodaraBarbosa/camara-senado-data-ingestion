@@ -135,4 +135,4 @@ aws s3 mb s3://dataplatform-camara-prod-db --region us-east-1
 
 1. Confirm that `deploy-dev` (branch `develop`) already runs successfully publishing `:latest` + `:dev-<sha>` to ECR — this validates the role/OIDC/paths-filter before touching production.
 2. Do a test merge to `main` and confirm that `deploy-prod` builds and publishes `:prod` + `:prod-<sha>` without error.
-3. Only after that, in Airflow, manually unpause the DAG `camara_ingestion_pipeline_prod` (it is born paused, with no `schedule_interval`) and/or change its `schedule_interval` in `airflow/dags/camera_ingestion_dag.py` from `None` to `"@weekly"` when you want it to run automatically.
+3. Only after that, in Airflow, manually unpause the DAG `camara_ingestion_pipeline_prod`. It is born paused (`AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION=true`) but already carries its production schedule in code — `schedule_interval="0 6 * * 0"` in `airflow/dags/camera_ingestion_dag.py`, i.e. every Sunday at 06:00 UTC (03:00 BRT). Unpausing is the only step needed to make it start running automatically.
