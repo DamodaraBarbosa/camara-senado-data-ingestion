@@ -1,58 +1,27 @@
 from extractors.camara.base import CamaraBaseExtractor
-import asyncio
 import aiohttp
-from datetime import datetime, date
-from utils.utils import add_months
+
+from utils.periods import legislatura_of_year, resolve_years
 
 
 class AsyncOrgaosExtractor(CamaraBaseExtractor):
+    """Órgãos da Câmara.
+
+    A versão anterior varria ``orgaos?dataInicio=...`` trimestre a trimestre.
+    Isso tinha dois defeitos sérios:
+
+    1. ``dataInicio`` filtra o órgão pela data de *criação*, então só voltavam
+       os criados dentro da janela — 180 de 1.639 órgãos (89% perdidos),
+       excluindo justamente os permanentes como o Plenário (id 180), onde
+       ocorre a maior parte das votações.
+    2. Cada trimestre repetia a mesma consulta, inflando 180 órgãos distintos
+       em 1.170 linhas duplicadas.
+
+    Como o cadastro de órgãos não é particionável por data de forma útil, a
+    extração passa a ser uma listagem paginada simples e completa.
+    """
+
     ENDPOINT = 'orgaos'
-    LEGISLATURA = 'legislaturas'
-
-    async def _fetch_period_pages(
-        self,
-        session,
-        id_legislatura,
-        current_start_date,
-        request_tries,
-        id_orgao,
-        sigla,
-        itens
-    ):
-        extracted_data = []
-        page = 1
-        empty_count = 0
-        current_params = {}
-
-        while empty_count < request_tries:
-            try:
-                current_params = {
-                    'dataInicio': current_start_date.isoformat(),
-                    'pagina': page
-                }
-
-                current_params = {k: v for k, v in current_params.items() if v is not None}
-
-                response = await self.client.get(session, self.ENDPOINT, params=current_params)
-                data = response.get('dados', [])
-
-                if not data:
-                    empty_count += 1
-                    page += 1
-                    continue
-
-                for orgao in data:
-                    orgao['idLegislatura'] = id_legislatura
-
-                extracted_data.extend(data)
-                empty_count = 0
-                page += 1
-
-            except Exception as e:
-                print(f'Error fetching orgaos from API with params {current_params}. Error: {e}')
-                break
-
-        return extracted_data
 
     async def extract(
         self,
@@ -60,49 +29,26 @@ class AsyncOrgaosExtractor(CamaraBaseExtractor):
         id_orgao: list = None,
         sigla: list = None,
         itens: int = 100,
-        request_tries: int = 4
+        request_tries: int = 4,      # mantido por compatibilidade de assinatura
     ):
+        self.partial = False
+
+        params = {}
+        if id_orgao:
+            params['id'] = id_orgao
+        if sigla:
+            params['sigla'] = sigla
+
         async with aiohttp.ClientSession() as session:
-            legislatura = await self.client.get(session, self.LEGISLATURA, params={'id': init_legislatura})
-            start_legislatura_date = legislatura['dados'][0].get('dataInicio', None)
-            start_legislatura_year = int(start_legislatura_date.split('-')[0]) if start_legislatura_date else None
+            orgaos = await self.client.get_all_pages(
+                session, self.ENDPOINT, params=params or None, itens=itens
+            )
+            years = await resolve_years(self.client, session, init_legislatura=init_legislatura)
 
-            current_year = datetime.now().year
-            start_year = start_legislatura_year if start_legislatura_year else current_year
-            years_range = range(start_year, current_year + 1)
+        # Mantém a chave que os extractors dependentes já consomem.
+        id_legislatura = legislatura_of_year(max(years)) if years else None
+        for orgao in orgaos:
+            orgao['idLegislatura'] = id_legislatura
 
-            tasks = []
-
-            for index, ano in enumerate(years_range):
-                id_legislatura = init_legislatura + (index // 4)
-
-                if index % 4 == 0 and id_legislatura == init_legislatura:
-                    current_start_date = date(ano, 2, 1)
-                else:
-                    current_start_date = date(ano, 1, 1)
-
-                if current_start_date > date.today():
-                    break
-
-                temp_date = current_start_date
-                while temp_date.year == ano:
-                    task = self._fetch_period_pages(
-                        session=session,
-                        id_legislatura=id_legislatura,
-                        current_start_date=temp_date,
-                        request_tries=request_tries,
-                        id_orgao=id_orgao,
-                        sigla=sigla,
-                        itens=itens
-                    )
-                    tasks.append(task)
-
-                    temp_date = add_months(temp_date, 3)
-                    if temp_date > date.today():
-                        break
-
-            results = await asyncio.gather(*tasks)
-
-            all_orgaos = [item for sublist in results if sublist for item in sublist]
-
-            return all_orgaos
+        print(f"[orgaos] {len(orgaos)} órgãos")
+        return orgaos

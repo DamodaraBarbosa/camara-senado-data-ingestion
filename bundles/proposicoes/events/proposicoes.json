@@ -1,0 +1,17 @@
+{
+  "extractor": "proposicoes",
+  "params": {
+    "autor": null,
+    "init_legislatura": null,
+    "sigla_partido_autor": null,
+    "sigla_uf_autor": null,
+    "tramitacao_senado": null,
+    "itens": 100,
+    "request_tries": 4
+  },
+  "destination": {
+    "type": "local",
+    "path": "/tmp/proposicoes/proposicoes.json"
+  },
+  "run_id": "proposicoes-proposicoes-local"
+}

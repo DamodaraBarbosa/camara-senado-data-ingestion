@@ -1,0 +1,13 @@
+{
+  "extractor": "discursos",
+  "params": {
+    "init_legislatura": null,
+    "items": 100,
+    "request_tries": 4
+  },
+  "destination": {
+    "type": "local",
+    "path": "/tmp/deputados/discursos.json"
+  },
+  "run_id": "deputados-discursos-local"
+}

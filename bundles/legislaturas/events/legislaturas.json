@@ -1,0 +1,11 @@
+{
+  "extractor": "legislaturas",
+  "params": {
+    "init_legislatura": null
+  },
+  "destination": {
+    "type": "local",
+    "path": "/tmp/legislaturas/legislaturas.json"
+  },
+  "run_id": "legislaturas-legislaturas-local"
+}

@@ -1,0 +1,9 @@
+{
+  "extractor": "codigo_situacao",
+  "params": {},
+  "destination": {
+    "type": "local",
+    "path": "/tmp/orgaos/codigo_situacao.json"
+  },
+  "run_id": "orgaos-codigo-situacao-local"
+}

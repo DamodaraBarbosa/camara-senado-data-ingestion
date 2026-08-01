@@ -1,0 +1,13 @@
+{
+  "extractor": "eventos",
+  "params": {
+    "init_legislatura": null,
+    "itens": 100,
+    "request_tries": 4
+  },
+  "destination": {
+    "type": "local",
+    "path": "/tmp/eventos/eventos.json"
+  },
+  "run_id": "eventos-eventos-local"
+}

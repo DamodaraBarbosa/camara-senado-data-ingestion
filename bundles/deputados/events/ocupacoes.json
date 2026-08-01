@@ -1,0 +1,8 @@
+{
+  "extractor": "ocupacoes",
+  "destination": {
+    "type": "local",
+    "path": "/tmp/deputados/ocupacoes.json"
+  },
+  "run_id": "deputados-ocupacoes-local"
+}

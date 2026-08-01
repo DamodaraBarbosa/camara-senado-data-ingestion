@@ -1,0 +1,9 @@
+{
+  "extractor": "situacoes_orgao",
+  "params": {},
+  "destination": {
+    "type": "local",
+    "path": "/tmp/orgaos/situacoes_orgao.json"
+  },
+  "run_id": "orgaos-situacoes-orgao-local"
+}

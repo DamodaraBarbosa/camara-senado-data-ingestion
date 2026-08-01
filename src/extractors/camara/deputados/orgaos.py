@@ -1,4 +1,5 @@
 from extractors.camara.base import CamaraBaseExtractor
+from utils.concurrency import gather_aligned
 import json
 import aiohttp
 
@@ -12,46 +13,44 @@ class AsyncOrgaosExtractor(CamaraBaseExtractor):
         items: int = 50,
         request_tries: int = 4
     ):
-        session = aiohttp.ClientSession()
-        legislatura = await self.client.get(session, 'legislaturas', params={'id': init_legislatura})
-        start_legislatura_date = legislatura['dados'][0].get('dataInicio', None)
+        async with aiohttp.ClientSession() as session:
+            params = {}
+            if init_legislatura is not None:
+                params['id'] = init_legislatura
+            legislatura = await self.client.get(session, 'legislaturas', params=params)
+            start_legislatura_date = (
+                legislatura['dados'][0].get('dataInicio', None) if legislatura.get('dados') else None
+            )
 
-        deputados_ids = list(dict.fromkeys(deputado.get('id') for deputado in deputados if deputado.get('id')))
-        all_orgaos = []
+            deputados_ids = list(dict.fromkeys(deputado.get('id') for deputado in deputados if deputado.get('id')))
 
-        for deputado_id in deputados_ids:
-            page = 1
-            empty_count = 0
+            print(
+                f'[orgaos] Iniciando extração para {len(deputados_ids)} deputados | '
+                f'data início legislatura: {start_legislatura_date}'
+            )
 
-            print(f'Extracting orgaos for deputado ID: {deputado_id}')
-            while empty_count < request_tries:
-                try:
-                    params = {
-                        'itens': items,
-                        'dataInicio': start_legislatura_date,
-                        'pagina': page
-                    }
+            tasks = [
+                self._fetch_deputado(session, deputado_id, start_legislatura_date, items)
+                for deputado_id in deputados_ids
+            ]
+            results, coverage, _errors = await gather_aligned(tasks, label='deputados/orgaos')
 
-                    params = {k: v for k, v in params.items() if v is not None}
+            all_bodies = [body for bodies in results for body in bodies]
+            print(f'[orgaos] Extração concluída | total de orgãos: {len(all_bodies)}')
 
-                    response = await self.client.get(session, self.ENDPOINT.format(id=deputado_id), params=params)
-                    data = response.get('dados', [])
+            self.partial = coverage < 0.99
+        return all_bodies
 
-                    if not data:
-                        empty_count += 1
-                        page += 1
-                        continue
+    async def _fetch_deputado(self, session, deputado_id, start_legislatura_date, items):
+        params = {'dataInicio': start_legislatura_date} if start_legislatura_date else {}
 
-                    empty_count = 0
+        bodies = await self.client.get_all_pages(
+            session,
+            self.ENDPOINT.format(id=deputado_id),
+            params=params,
+            itens=items
+        )
+        for orgao in bodies:
+            orgao['deputado_id'] = deputado_id
 
-                    for orgao in data:
-                        orgao['deputado_id'] = deputado_id
-
-                    all_orgaos.extend(data)
-                    page += 1
-
-                except Exception as e:
-                    print(f'Error while extracting orgaos for deputado {deputado_id}: {e}')
-
-        await session.close()
-        return all_orgaos
+        return bodies

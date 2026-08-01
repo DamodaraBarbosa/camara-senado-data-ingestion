@@ -1,124 +1,93 @@
 from extractors.camara.base import CamaraBaseExtractor
-import json
-import asyncio
 import aiohttp
-from datetime import datetime, date
-from utils.utils import add_months
+import json
+
+from utils.bulk import intern_str, nullify, to_int, unflatten
+from utils.periods import legislatura_of_year, resolve_years
 
 
 class AsyncEventosExtractor(CamaraBaseExtractor):
-    ENDPOINT = 'orgaos/{id}/eventos'
-    LEGISLATURA_ENDPOINT = 'legislaturas'
+    """Eventos por órgão, via junção de dois arquivos bulk.
 
-    async def _fetch_period_pages(
-        self,
-        session,
-        id_legislatura,
-        current_start_date,
-        request_tries,
-        id_orgao,
-        itens
-    ):
-        base_params = {
-            'itens': itens
-        }
+    Antes: ``orgaos/{id}/eventos`` por órgão e por trimestre, montando ~16.000
+    corrotinas num único ``gather`` sem lotes nem orçamento.
 
-        extracted_data = []
-        page = 1
-        empty_count = 0
-        current_params = {}
+    Agora: ``eventosOrgaos-{ano}.csv`` traz as arestas órgão↔evento e
+    ``eventos-{ano}.csv`` os atributos do evento. Um registro por aresta,
+    mantendo o mesmo formato que a versão por órgão produzia.
+    """
 
-        while empty_count < request_tries:
-            try:
-                current_params = base_params.copy()
-                current_params.update({
-                    'dataInicio': current_start_date.isoformat(),
-                    'pagina': page
-                })
-
-                current_params = {k: v for k, v in current_params.items() if v is not None}
-
-                response = await self.client.get(session, self.ENDPOINT.format(id=id_orgao), params=current_params)
-                data = response.get('dados', [])
-
-                if not data:
-                    empty_count += 1
-                    page += 1
-                    continue
-
-                for evento in data:
-                    evento['idLegislatura'] = id_legislatura
-                    evento['idOrgao'] = id_orgao
-
-                extracted_data.extend(data)
-                empty_count = 0
-                page += 1
-
-            except Exception as e:
-                print(f'Error fetching eventos from API with params {current_params}. Error: {e}')
-                break
-
-        return extracted_data
+    EDGES = "eventosOrgaos"
+    EVENTS = "eventos"
 
     async def extract(
         self,
         init_legislatura: int = None,
         orgaos: json = None,
-        itens: int = 100,
-        request_tries: int = 4
+        itens: int = 100,            # mantidos por compatibilidade de assinatura
+        request_tries: int = 4,
+        anos: list = None,
+        ano_inicio: int = None,
     ):
+        self.partial = False
+
         async with aiohttp.ClientSession() as session:
-            orgaos_id = list(
-                dict.fromkeys(
-                    [orgao.get('id') for orgao in orgaos if orgao.get('id')]
-                )
+            years = await resolve_years(
+                self.client, session,
+                init_legislatura=init_legislatura, anos=anos, ano_inicio=ano_inicio,
             )
-            start_legislatura = await self.client.get(
-                session,
-                self.LEGISLATURA_ENDPOINT,
-                params={
-                    'id': init_legislatura,
-                },
+        years = await self.bulk.available_partitions(self.EVENTS, years)
+
+        wanted = None
+        if orgaos:
+            wanted = {str(o.get("id")) for o in orgaos if o.get("id") is not None}
+
+        all_eventos = []
+        for ano in years:
+            events = {
+                row["id"]: row
+                for row in await self.bulk.read_rows(self.EVENTS, ano, transform=_to_evento)
+                if row["id"] is not None
+            }
+            edges = await self.bulk.read_rows(
+                self.EDGES, ano,
+                row_filter=(lambda r: r.get("idOrgao") in wanted) if wanted else None,
             )
-            start_legislatura_date = start_legislatura['dados'][0].get('dataInicio', None)
-            start_legislatura_year = int(start_legislatura_date.split('-')[0]) if start_legislatura_date else None
 
-            current_year = datetime.now().year
-            start_year = start_legislatura_year if start_legislatura_year else current_year
-            years_range = range(start_year, current_year + 1)
+            missing = 0
+            for edge in edges:
+                id_evento = to_int(edge.get("idEvento"))
+                base = events.get(id_evento)
+                if base is None:
+                    missing += 1
+                    continue
+                record = dict(base)
+                record["idOrgao"] = to_int(edge.get("idOrgao"))
+                record["uriOrgao"] = nullify(edge.get("uriOrgao"))
+                record["siglaOrgao"] = intern_str(nullify(edge.get("siglaOrgao")))
+                record["idLegislatura"] = legislatura_of_year(ano)
+                all_eventos.append(record)
 
-            tasks = []
+            if missing:
+                # Aresta apontando para evento de outro ano é normal na virada;
+                # volume alto indicaria arquivos dessincronizados.
+                print(f"[orgaos/eventos] {ano}: {missing} aresta(s) sem evento correspondente")
+            print(f"[orgaos/eventos] {ano}: {len(edges)} arestas (total {len(all_eventos)})")
 
-            for orgao_id in orgaos_id:
-                for index, ano in enumerate(years_range):
-                    id_legislatura = init_legislatura + (index // 4)
+        return all_eventos
 
-                    if index % 4 == 0 and id_legislatura == init_legislatura:
-                        current_start_date = date(ano, 2, 1)
-                    else:
-                        current_start_date = date(ano, 1, 1)
 
-                    if current_start_date > date.today():
-                        break
-
-                    temp_date = current_start_date
-                    while temp_date.year == ano:
-                        task = self._fetch_period_pages(
-                            session=session,
-                            id_legislatura=id_legislatura,
-                            current_start_date=temp_date,
-                            request_tries=request_tries,
-                            id_orgao=orgao_id,
-                            itens=itens
-                        )
-                        tasks.append(task)
-
-                        temp_date = add_months(temp_date, 3)
-                        if temp_date > date.today():
-                            break
-
-            results = await asyncio.gather(*tasks)
-
-            all_eventos = [item for sublist in results if sublist for item in sublist]
-
-            return all_eventos
+def _to_evento(row: dict) -> dict:
+    return {
+        "id": to_int(row.get("id")),
+        "uri": nullify(row.get("uri")),
+        "dataHoraInicio": nullify(row.get("dataHoraInicio")),
+        "dataHoraFim": nullify(row.get("dataHoraFim")),
+        "situacao": intern_str(nullify(row.get("situacao"))),
+        "descricaoTipo": intern_str(nullify(row.get("descricaoTipo"))),
+        "descricao": nullify(row.get("descricao")),
+        "localExterno": nullify(row.get("localExterno")),
+        "urlDocumentoPauta": nullify(row.get("urlDocumentoPauta")),
+        # O arquivo usa ponto como separador: `localCamara.nome`.
+        "localCamara": unflatten(row, "localCamara"),
+    }

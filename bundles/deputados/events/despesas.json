@@ -1,0 +1,14 @@
+{
+  "extractor": "despesas",
+  "params": {
+    "init_legislatura": null,
+    "month": null,
+    "items": 1000,
+    "request_tries": 4
+  },
+  "destination": {
+    "type": "local",
+    "path": "/tmp/deputados/despesas.json"
+  },
+  "run_id": "deputados-despesas-local"
+}

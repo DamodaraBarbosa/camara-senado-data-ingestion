@@ -1,0 +1,11 @@
+{
+  "extractor": "mesa",
+  "params": {
+    "init_legislatura": null
+  },
+  "destination": {
+    "type": "local",
+    "path": "/tmp/deputados/mesa.json"
+  },
+  "run_id": "deputados-mesa-local"
+}

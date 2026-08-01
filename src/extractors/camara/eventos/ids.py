@@ -1,6 +1,6 @@
 from extractors.camara.base import CamaraBaseExtractor
+from utils.concurrency import gather_aligned
 import aiohttp
-import asyncio
 
 
 class AsyncEventosIdsExtractor(CamaraBaseExtractor):
@@ -20,10 +20,13 @@ class AsyncEventosIdsExtractor(CamaraBaseExtractor):
                 task = self.client.get(session, self.ENDPOINT.format(id=evento))
                 tasks.append(task)
 
-            results = await asyncio.gather(*tasks)
+            results, coverage, _errors = await gather_aligned(tasks, label='eventos/ids')
 
             for result in results:
+                if result is None:
+                    continue
                 ids_data = result.get('dados', {})
                 all_ids.append(ids_data)
 
+        self.partial = coverage < 0.99
         return all_ids

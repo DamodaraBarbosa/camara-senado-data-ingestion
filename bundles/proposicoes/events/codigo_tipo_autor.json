@@ -1,0 +1,9 @@
+{
+  "extractor": "codigo_tipo_autor",
+  "params": {},
+  "destination": {
+    "type": "local",
+    "path": "/tmp/proposicoes/codigo_tipo_autor.json"
+  },
+  "run_id": "proposicoes-codigo-tipo-autor-local"
+}

@@ -1,22 +1,15 @@
 import pytest
+from unittest.mock import AsyncMock
 from extractors.camara.eventos.eventos import AsyncEventosExtractor
 
 @pytest.mark.asyncio
 async def test_extract_eventos_success(mock_client):
     # Setup mock returns
-    # 1. legislaturas return
-    # 2. _fetch_pages through mock_client.get
-    mock_client.get.side_effect = [
-        {'dados': [{'id': 56}]},  # legislaturas
-        {'dados': [{'id': 1, 'nome': 'Evento 1'}]},  # page 1
-        {'dados': []},  # page 2 (empty count 1)
-        {'dados': []},  # empty count 2
-        {'dados': []},  # empty count 3
-        {'dados': []},  # empty count 4 (stop)
-    ]
+    mock_client.get = AsyncMock(return_value={'dados': [{'id': 56}]})
+    mock_client.get_all_pages = AsyncMock(return_value=[{'id': 1, 'nome': 'Evento 1'}])
 
     extractor = AsyncEventosExtractor(mock_client)
-    result = await extractor.extract(init_legislatura=56, request_tries=4)
+    result = await extractor.extract(init_legislatura=56)
 
     assert len(result) == 1
     assert result[0]['id'] == 1
@@ -24,15 +17,10 @@ async def test_extract_eventos_success(mock_client):
 
 @pytest.mark.asyncio
 async def test_extract_eventos_empty(mock_client):
-    mock_client.get.side_effect = [
-        {'dados': [{'id': 56}]},
-        {'dados': []},  # page 1
-        {'dados': []},
-        {'dados': []},
-        {'dados': []},
-    ]
+    mock_client.get = AsyncMock(return_value={'dados': [{'id': 56}]})
+    mock_client.get_all_pages = AsyncMock(return_value=[])
 
     extractor = AsyncEventosExtractor(mock_client)
-    result = await extractor.extract(init_legislatura=56, request_tries=4)
+    result = await extractor.extract(init_legislatura=56)
 
     assert len(result) == 0

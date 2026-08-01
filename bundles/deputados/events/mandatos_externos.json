@@ -1,0 +1,8 @@
+{
+  "extractor": "mandatos_externos",
+  "destination": {
+    "type": "local",
+    "path": "/tmp/deputados/mandatos_externos.json"
+  },
+  "run_id": "deputados-mandatos-externos-local"
+}

@@ -1,0 +1,220 @@
+version: '3.9'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: camara-postgres
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: dev_password
+      POSTGRES_DB: camara_data
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - camara-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin -d camara_data"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  extractor-proposicoes:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: camara-extractor-proposicoes
+    environment:
+      BUNDLE: proposicoes
+      RUN_ID: docker-compose-run
+      DEBUG_MODE: "false"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - camara-network
+    restart: on-failure
+    volumes:
+      - ./src:/app/src:ro
+      - ./bundles:/app/bundles:ro
+
+  extractor-deputados:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: camara-extractor-deputados
+    environment:
+      BUNDLE: deputados
+      RUN_ID: docker-compose-run
+      DEBUG_MODE: "false"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - camara-network
+    restart: on-failure
+    volumes:
+      - ./src:/app/src:ro
+      - ./bundles:/app/bundles:ro
+
+  extractor-votacoes:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: camara-extractor-votacoes
+    environment:
+      BUNDLE: votacoes
+      RUN_ID: docker-compose-run
+      DEBUG_MODE: "false"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - camara-network
+    restart: on-failure
+    volumes:
+      - ./src:/app/src:ro
+      - ./bundles:/app/bundles:ro
+
+  extractor-orgaos:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: camara-extractor-orgaos
+    environment:
+      BUNDLE: orgaos
+      RUN_ID: docker-compose-run
+      DEBUG_MODE: "false"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - camara-network
+    restart: on-failure
+    volumes:
+      - ./src:/app/src:ro
+      - ./bundles:/app/bundles:ro
+
+  extractor-partidos:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: camara-extractor-partidos
+    environment:
+      BUNDLE: partidos
+      RUN_ID: docker-compose-run
+      DEBUG_MODE: "false"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - camara-network
+    restart: on-failure
+    volumes:
+      - ./src:/app/src:ro
+      - ./bundles:/app/bundles:ro
+
+  extractor-legislaturas:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: camara-extractor-legislaturas
+    environment:
+      BUNDLE: legislaturas
+      RUN_ID: docker-compose-run
+      DEBUG_MODE: "false"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - camara-network
+    restart: on-failure
+    volumes:
+      - ./src:/app/src:ro
+      - ./bundles:/app/bundles:ro
+
+  extractor-blocos:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: camara-extractor-blocos
+    environment:
+      BUNDLE: blocos
+      RUN_ID: docker-compose-run
+      DEBUG_MODE: "false"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - camara-network
+    restart: on-failure
+    volumes:
+      - ./src:/app/src:ro
+      - ./bundles:/app/bundles:ro
+
+  extractor-frentes:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: camara-extractor-frentes
+    environment:
+      BUNDLE: frentes
+      RUN_ID: docker-compose-run
+      DEBUG_MODE: "false"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - camara-network
+    restart: on-failure
+    volumes:
+      - ./src:/app/src:ro
+      - ./bundles:/app/bundles:ro
+
+  extractor-eventos:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: camara-extractor-eventos
+    environment:
+      BUNDLE: eventos
+      RUN_ID: docker-compose-run
+      DEBUG_MODE: "false"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - camara-network
+    restart: on-failure
+    volumes:
+      - ./src:/app/src:ro
+      - ./bundles:/app/bundles:ro
+
+  extractor-grupos:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: camara-extractor-grupos
+    environment:
+      BUNDLE: grupos
+      RUN_ID: docker-compose-run
+      DEBUG_MODE: "false"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - camara-network
+    restart: on-failure
+    volumes:
+      - ./src:/app/src:ro
+      - ./bundles:/app/bundles:ro
+
+networks:
+  camara-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+
+    

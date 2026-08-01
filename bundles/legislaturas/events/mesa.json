@@ -1,0 +1,9 @@
+{
+  "extractor": "mesa",
+  "params": {},
+  "destination": {
+    "type": "local",
+    "path": "/tmp/legislaturas/mesa.json"
+  },
+  "run_id": "legislaturas-mesa-local"
+}

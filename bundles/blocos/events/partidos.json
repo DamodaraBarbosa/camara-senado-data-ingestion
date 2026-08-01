@@ -1,0 +1,8 @@
+{
+  "extractor": "partidos",
+  "destination": {
+    "type": "local",
+    "path": "/tmp/blocos/partidos.json"
+  },
+  "run_id": "blocos-partidos-local"
+}

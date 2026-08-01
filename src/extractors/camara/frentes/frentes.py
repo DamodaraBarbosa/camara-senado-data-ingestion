@@ -6,47 +6,6 @@ class AsyncFrentesExtractor(CamaraBaseExtractor):
     ENDPOINT = 'frentes'
     LEGISLATURAS = 'legislaturas'
 
-    async def _fetch_pages(
-        self,
-        session,
-        id_legislatura,
-        request_tries,
-        itens
-    ):
-        extracted_data = []
-        page = 1
-        empty_count = 0
-
-        while empty_count < request_tries:
-            try:
-                current_params = {
-                    'itens': itens,
-                    'pagina': page
-                }
-
-                current_params = {k: v for k, v in current_params.items() if v is not None}
-
-                response = await self.client.get(session, self.ENDPOINT, params=current_params)
-                data = response.get('dados', [])
-
-                if not data:
-                    empty_count += 1
-                    page += 1
-                    continue
-
-                for frente in data:
-                    frente['idLegislatura'] = id_legislatura
-                    extracted_data.append(frente)
-
-                page += 1
-                empty_count = 0
-
-            except Exception as e:
-                print(f"Error fetching data for legislatura {id_legislatura}, page {page}: {e}")
-                empty_count += 1
-
-        return extracted_data
-
     async def extract(
         self,
         init_legislatura: int = None,
@@ -63,7 +22,11 @@ class AsyncFrentesExtractor(CamaraBaseExtractor):
             start = init_legislatura if init_legislatura is not None else current_legislatura
 
             for id_legislatura in range(start, current_legislatura + 1):
-                frentes_data = await self._fetch_pages(session, id_legislatura, request_tries, itens)
+                frentes_data = await self.client.get_all_pages(session, self.ENDPOINT, itens=itens)
+
+                for frente in frentes_data:
+                    frente['idLegislatura'] = id_legislatura
+
                 all_frentes.extend(frentes_data)
 
         return all_frentes

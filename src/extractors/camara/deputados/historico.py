@@ -1,4 +1,5 @@
 from extractors.camara.base import CamaraBaseExtractor
+from utils.concurrency import gather_aligned
 import json
 import aiohttp
 
@@ -12,19 +13,25 @@ class AsyncHistoricoExtractor(CamaraBaseExtractor):
         all_historico = []
 
         try:
+            tasks = []
             for deputado_id in deputados_ids:
-                response = await self.client.get(session, self.ENDPOINT.format(id=deputado_id))
-                data = response.get('dados', [])
+                task = self.client.get(session, self.ENDPOINT.format(id=deputado_id))
+                tasks.append((deputado_id, task))
 
-                for historico in data:
+            results, coverage, _errors = await gather_aligned(
+                [task for _, task in tasks], label='deputados/historico')
+
+            for (deputado_id, _), data in zip(tasks, results):
+                if data is None:
+                    continue
+                historico_data = data.get('dados', [])
+                for historico in historico_data:
                     historico['deputado_id'] = deputado_id
-
-                print(f'ID: {deputado_id} | Data ID: {data[0].get("deputado_id", None)} | Data length: {len(data)}')
-
-                all_historico.extend(data)
+                all_historico.extend(historico_data)
 
         except Exception as e:
-            print(f'Error while extracting historico for deputado {deputado_id}: {e}')
+            print(f'Error while extracting historico: {e}')
 
         await session.close()
+        self.partial = coverage < 0.99
         return all_historico

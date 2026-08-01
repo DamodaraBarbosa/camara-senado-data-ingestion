@@ -1,0 +1,13 @@
+{
+  "extractor": "frentes",
+  "params": {
+    "init_legislatura": null,
+    "itens": 100,
+    "request_tries": 4
+  },
+  "destination": {
+    "type": "local",
+    "path": "/tmp/frentes/frentes.json"
+  },
+  "run_id": "frentes-frentes-local"
+}

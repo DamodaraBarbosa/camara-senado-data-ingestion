@@ -1,0 +1,9 @@
+{
+  "extractor": "ids",
+  "params": {},
+  "destination": {
+    "type": "local",
+    "path": "/tmp/legislaturas/ids.json"
+  },
+  "run_id": "legislaturas-ids-local"
+}

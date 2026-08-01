@@ -1,0 +1,8 @@
+{
+  "extractor": "frentes",
+  "destination": {
+    "type": "local",
+    "path": "/tmp/deputados/frentes.json"
+  },
+  "run_id": "deputados-frentes-local"
+}

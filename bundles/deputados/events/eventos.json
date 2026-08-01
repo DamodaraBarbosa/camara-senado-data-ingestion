@@ -1,0 +1,13 @@
+{
+  "extractor": "eventos",
+  "params": {
+    "init_legislatura": null,
+    "items": 50,
+    "request_tries": 4
+  },
+  "destination": {
+    "type": "local",
+    "path": "/tmp/deputados/eventos.json"
+  },
+  "run_id": "deputados-eventos-local"
+}

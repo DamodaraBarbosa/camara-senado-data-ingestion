@@ -1,5 +1,5 @@
 from extractors.camara.base import CamaraBaseExtractor
-import asyncio
+from utils.concurrency import gather_aligned
 import aiohttp
 from datetime import datetime, date
 from utils.utils import add_months
@@ -15,41 +15,22 @@ class AsyncPartidosMembrosExtractor(CamaraBaseExtractor):
         id_legislatura,
         id_partido,
         current_start_date,
-        request_tries,
         itens
     ):
-        extracted_data = []
-        page = 1
-        empty_count = 0
+        params = {
+            'dataInicio': current_start_date.isoformat(),
+        }
+        params = {k: v for k, v in params.items() if v is not None}
 
-        while empty_count < request_tries:
-            try:
-                current_params = {
-                    'dataInicio': current_start_date.isoformat(),
-                    'pagina': page
-                }
-
-                current_params = {k: v for k, v in current_params.items() if v is not None}
-
-                response = await self.client.get(session, self.ENDPOINT.format(id=id_partido), params=current_params)
-                data = response.get('dados', [])
-
-                if not data:
-                    empty_count += 1
-                    page += 1
-                    continue
-
-                for membro in data:
-                    membro['idLegislatura'] = id_legislatura
-                    membro['idPartido'] = id_partido
-
-                extracted_data.extend(data)
-                empty_count = 0
-                page += 1
-
-            except Exception as e:
-                print(f'Error fetching membros from API with params {current_params}. Error: {e}')
-                break
+        extracted_data = await self.client.get_all_pages(
+            session,
+            self.ENDPOINT.format(id=id_partido),
+            params=params,
+            itens=itens
+        )
+        for membro in extracted_data:
+            membro['idLegislatura'] = id_legislatura
+            membro['idPartido'] = id_partido
 
         return extracted_data
 
@@ -63,8 +44,13 @@ class AsyncPartidosMembrosExtractor(CamaraBaseExtractor):
         partidos_id = list(dict.fromkeys(partido.get('id') for partido in partidos if partido.get('id')))
 
         async with aiohttp.ClientSession() as session:
-            legislatura = await self.client.get(session, self.LEGISLATURA, params={'id': init_legislatura})
-            start_legislatura_date = legislatura['dados'][0].get('dataInicio', None)
+            params = {}
+            if init_legislatura is not None:
+                params['id'] = init_legislatura
+            legislatura = await self.client.get(session, self.LEGISLATURA, params=params)
+            start_legislatura_date = (
+                legislatura['dados'][0].get('dataInicio', None) if legislatura.get('dados') else None
+            )
             start_legislatura_year = int(start_legislatura_date.split('-')[0]) if start_legislatura_date else None
 
             current_year = datetime.now().year
@@ -75,8 +61,8 @@ class AsyncPartidosMembrosExtractor(CamaraBaseExtractor):
 
             for id_partido in partidos_id:
                 for index, ano in enumerate(years_range):
-                    id_legislatura = init_legislatura + (index // 4)
-                    if index % 4 == 0 and id_legislatura == init_legislatura:
+                    id_legislatura = init_legislatura + (index // 4) if init_legislatura is not None else None
+                    if init_legislatura is not None and index % 4 == 0 and id_legislatura == init_legislatura:
                         current_start_date = date(ano, 2, 1)
                     else:
                         current_start_date = date(ano, 1, 1)
@@ -91,7 +77,6 @@ class AsyncPartidosMembrosExtractor(CamaraBaseExtractor):
                             id_legislatura=id_legislatura,
                             id_partido=id_partido,
                             current_start_date=temp_date,
-                            request_tries=request_tries,
                             itens=itens
                         )
                         tasks.append(task)
@@ -100,8 +85,9 @@ class AsyncPartidosMembrosExtractor(CamaraBaseExtractor):
                         if temp_date > date.today():
                             break
 
-            results = await asyncio.gather(*tasks)
+            results, coverage, _errors = await gather_aligned(tasks, label='partidos/membros')
 
             all_membros = [item for sublist in results if sublist for item in sublist]
 
-            return all_membros
+            self.partial = coverage < 0.99
+        return all_membros

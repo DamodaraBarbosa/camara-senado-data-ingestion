@@ -1,5 +1,5 @@
 from extractors.camara.base import CamaraBaseExtractor
-import asyncio
+from utils.concurrency import gather_aligned
 import aiohttp
 
 
@@ -15,10 +15,13 @@ class AsyncCodigoSituacaoOrgaoExtractor(CamaraBaseExtractor):
             task = self.client.get(session, self.ENDPOINT)
             tasks.append(task)
 
-            results = await asyncio.gather(*tasks)
+            results, coverage, _errors = await gather_aligned(tasks, label='orgaos/codigo_situacao')
 
             for result in results:
+                if result is None:
+                    continue
                 codigo = result.get('dados', [])
                 all_codigos.append(codigo)
 
-            return all_codigos
+            self.partial = coverage < 0.99
+        return all_codigos

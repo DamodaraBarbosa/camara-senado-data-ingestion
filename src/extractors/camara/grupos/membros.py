@@ -1,6 +1,6 @@
 from extractors.camara.base import CamaraBaseExtractor
+from utils.concurrency import gather_aligned
 import aiohttp
-import asyncio
 
 
 class AsyncGruposMembrosExtractor(CamaraBaseExtractor):
@@ -20,7 +20,7 @@ class AsyncGruposMembrosExtractor(CamaraBaseExtractor):
                 task = self.client.get(session, self.ENDPOINT.format(id=grupo))
                 tasks.append(task)
 
-            results = await asyncio.gather(*tasks)
+            results, coverage, _errors = await gather_aligned(tasks, label='grupos/membros')
 
             for index, result in enumerate(results):
                 membros_data = result.get('dados', [])
@@ -29,4 +29,5 @@ class AsyncGruposMembrosExtractor(CamaraBaseExtractor):
                     membro['idGrupo'] = grupo_id
                 all_membros.append(membros_data)
 
+        self.partial = coverage < 0.99
         return all_membros

@@ -1,0 +1,9 @@
+{
+  "extractor": "votacoes",
+  "params": {},
+  "destination": {
+    "type": "local",
+    "path": "/tmp/eventos/votacoes.json"
+  },
+  "run_id": "eventos-votacoes-local"
+}
