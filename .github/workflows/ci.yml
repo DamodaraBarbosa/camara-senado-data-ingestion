@@ -5,6 +5,7 @@ on:
     branches: [main, master, develop]
   pull_request:
     branches: [main, master, develop]
+  workflow_dispatch:
 
 jobs:
   lint:
@@ -63,7 +64,7 @@ jobs:
   deploy-dev:
     name: Deploy (dev)
     needs: [lint, test]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
+    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/develop'
     runs-on: ubuntu-latest
     permissions:
       id-token: write
@@ -87,19 +88,19 @@ jobs:
               - 'requirements.txt'
 
       - name: Configure AWS credentials (OIDC)
-        if: steps.filter.outputs.deploy == 'true'
+        if: steps.filter.outputs.deploy == 'true' || github.event_name == 'workflow_dispatch'
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_DEV_DEPLOY_ROLE_ARN }}
           aws-region: us-east-1
 
       - name: Login to ECR
-        if: steps.filter.outputs.deploy == 'true'
+        if: steps.filter.outputs.deploy == 'true' || github.event_name == 'workflow_dispatch'
         id: ecr-login
         uses: aws-actions/amazon-ecr-login@v2
 
       - name: Build, tag, and push image
-        if: steps.filter.outputs.deploy == 'true'
+        if: steps.filter.outputs.deploy == 'true' || github.event_name == 'workflow_dispatch'
         env:
           ECR_REGISTRY: ${{ steps.ecr-login.outputs.registry }}
           IMAGE_REPO: camara-ingestion
@@ -115,7 +116,7 @@ jobs:
   deploy-prod:
     name: Deploy (production)
     needs: [lint, test]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     environment: production
     permissions:
@@ -140,19 +141,19 @@ jobs:
               - 'requirements.txt'
 
       - name: Configure AWS credentials (OIDC)
-        if: steps.filter.outputs.deploy == 'true'
+        if: steps.filter.outputs.deploy == 'true' || github.event_name == 'workflow_dispatch'
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_PROD_DEPLOY_ROLE_ARN }}
           aws-region: us-east-1
 
       - name: Login to ECR
-        if: steps.filter.outputs.deploy == 'true'
+        if: steps.filter.outputs.deploy == 'true' || github.event_name == 'workflow_dispatch'
         id: ecr-login
         uses: aws-actions/amazon-ecr-login@v2
 
       - name: Build, tag, and push image
-        if: steps.filter.outputs.deploy == 'true'
+        if: steps.filter.outputs.deploy == 'true' || github.event_name == 'workflow_dispatch'
         env:
           ECR_REGISTRY: ${{ steps.ecr-login.outputs.registry }}
           IMAGE_REPO: camara-ingestion
