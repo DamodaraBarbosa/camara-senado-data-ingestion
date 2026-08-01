@@ -72,6 +72,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Check for deploy-relevant changes
         uses: dorny/paths-filter@v3
@@ -123,6 +125,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Check for deploy-relevant changes
         uses: dorny/paths-filter@v3
