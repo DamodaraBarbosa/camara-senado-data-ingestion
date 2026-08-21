@@ -12,11 +12,15 @@
 # Unlike the dev file, no ~/.aws/credentials mount and no
 # AWS_SHARED_CREDENTIALS_FILE env var: boto3 inside the containers picks up
 # credentials automatically from the EC2 instance's IAM role via IMDS.
+#
+# Uses a custom-built image (airflow/Dockerfile) with apache-airflow-providers-amazon
+# baked in, instead of _PIP_ADDITIONAL_REQUIREMENTS — see that Dockerfile's
+# comment for why (CPU-credit exhaustion / crash loop on small instances).
 version: '3.8'
 
 x-airflow-common:
   &airflow-common
-  image: apache/airflow:2.8.1-python3.11
+  image: 904464083417.dkr.ecr.us-east-1.amazonaws.com/camara-airflow:latest
   environment:
     &airflow-common-env
     AIRFLOW__CORE__EXECUTOR: LocalExecutor
@@ -26,8 +30,6 @@ x-airflow-common:
     AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
     AIRFLOW__API__AUTH_BACKENDS: 'airflow.api.auth.backend.basic_auth,airflow.api.auth.backend.session'
     AWS_DEFAULT_REGION: us-east-1
-    # Base image ships without provider packages; EcsRunTaskOperator needs this.
-    _PIP_ADDITIONAL_REQUIREMENTS: apache-airflow-providers-amazon
   volumes:
     - ./dags:/opt/airflow/dags
     - ./logs:/opt/airflow/logs

@@ -29,7 +29,8 @@ Reference document to optimize future work in this repository. Describes structu
 │   │       ├── bundles_config.dev.json  # Cluster/task-def for dev
 │   │       └── bundles_config.prod.json # Cluster/task-def for prod (placeholder)
 │   ├── docker-compose-airflow.yml       # Local Airflow (dev mode)
-│   └── docker-compose-airflow.prod.yml  # Airflow for the prod EC2 host (IAM role creds, no SSH)
+│   ├── docker-compose-airflow.prod.yml  # Airflow for the prod EC2 host (IAM role creds, no SSH)
+│   └── Dockerfile                       # Custom Airflow image (amazon provider baked in, not pip-at-boot)
 │
 ├── .github/workflows/
 │   └── ci.yml                   # GitHub Actions: lint, test, deploy-dev, deploy-prod
@@ -395,7 +396,7 @@ export CAMARA_CACHE_DIR=/tmp/camara-cache
 
 1. **Logging**: Currently uses `print()` → CloudWatch. Could migrate to `logging` module + structured JSON logs.
 2. **Linting**: Only flake8; no black/isort/mypy (could add to requirements-dev.txt later).
-3. **Prod infrastructure**: ECS cluster, task definition, S3 bucket and IAM roles are provisioned and running real weekly ingestion (see `docs/PROD_DEPLOY_RUNBOOK.md`). The Airflow scheduler/webserver itself runs on a dedicated EC2 instance rather than MWAA (cost — MWAA bills a fixed hourly rate even when idle) — see `docs/PROD_AIRFLOW_EC2_RUNBOOK.md`. No infra-as-code yet; both runbooks are manual AWS CLI checklists.
+3. **Prod infrastructure**: ECS cluster, task definition, S3 bucket and IAM roles are provisioned and running real weekly ingestion (see `docs/PROD_DEPLOY_RUNBOOK.md`). The Airflow scheduler/webserver itself runs on a dedicated EC2 instance rather than MWAA (cost — MWAA bills a fixed hourly rate even when idle) — see `docs/PROD_AIRFLOW_EC2_RUNBOOK.md`. That instance runs a custom-built image (`airflow/Dockerfile`, pushed to the `camara-airflow` ECR repo) with `apache-airflow-providers-amazon` baked in — using `_PIP_ADDITIONAL_REQUIREMENTS` there (fine for local dev) caused a CPU-credit exhaustion crash loop on the small EC2 instance, since it reinstalls the package via pip on every container start. No infra-as-code yet; both runbooks are manual AWS CLI checklists.
 4. **Caching**: In-memory for extractors; could add distributed cache (Redis) for cross-task deps.
 5. **Monitoring**: No metrics/traces yet; could integrate with DataDog/New Relic.
 
