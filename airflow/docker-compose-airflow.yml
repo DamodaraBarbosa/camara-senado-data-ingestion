@@ -16,6 +16,8 @@ x-airflow-common:
     # AWS credentials configuration
     AWS_DEFAULT_REGION: us-east-1
     AWS_SHARED_CREDENTIALS_FILE: /home/airflow/.aws/credentials
+    # Base image ships without provider packages; EcsRunTaskOperator needs this.
+    _PIP_ADDITIONAL_REQUIREMENTS: apache-airflow-providers-amazon
   volumes:
     - ./dags:/opt/airflow/dags
     - ./logs:/opt/airflow/logs
