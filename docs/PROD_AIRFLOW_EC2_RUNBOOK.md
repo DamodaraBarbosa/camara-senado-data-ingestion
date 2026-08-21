@@ -4,7 +4,26 @@ This document is a manual checklist, same style as `docs/PROD_DEPLOY_RUNBOOK.md`
 
 Run the commands below with a user/role that has admin permission in AWS account `904464083417` (region `us-east-1`), reviewing each one before running. Assumes `docs/PROD_DEPLOY_RUNBOOK.md` has already been completed (ECS cluster/task definitions/S3 bucket for prod already exist).
 
-## 1. IAM role for the instance
+## 1. Build and push the custom Airflow image
+
+The base `apache/airflow` image ships without the `apache-airflow-providers-amazon` package that `EcsRunTaskOperator` needs. Do **not** install it via `_PIP_ADDITIONAL_REQUIREMENTS` at container startup on this host: that reinstalls the package via pip on every single container start (webserver, scheduler, airflow-init), and on a small/burstable instance (`t3.micro`) that's enough repeated CPU load to exhaust CPU credits, throttle the instance to baseline, make the install even slower, blow past Airflow's internal startup retry limit, and crash-loop indefinitely (`restart: always` just repeats the expensive install forever). Bake the provider into the image once instead — see `airflow/Dockerfile`.
+
+Build from a machine with real (non-burstable) CPU — your own machine or CI, not the EC2 instance being provisioned:
+
+```bash
+aws ecr create-repository --repository-name camara-airflow --region us-east-1
+
+aws ecr get-login-password --region us-east-1 | \
+  docker login --username AWS --password-stdin 904464083417.dkr.ecr.us-east-1.amazonaws.com
+
+docker build -t camara-airflow:latest -f airflow/Dockerfile airflow/
+docker tag camara-airflow:latest 904464083417.dkr.ecr.us-east-1.amazonaws.com/camara-airflow:latest
+docker push 904464083417.dkr.ecr.us-east-1.amazonaws.com/camara-airflow:latest
+```
+
+Re-run the `build`/`tag`/`push` commands whenever `airflow/Dockerfile` changes (e.g. bumping the Airflow or provider version) — the EC2 instance only ever pulls this image, it never builds it.
+
+## 2. IAM role for the instance
 
 Trust policy (EC2 service):
 
@@ -33,7 +52,7 @@ aws iam attach-role-policy \
   --policy-arn arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
 ```
 
-Inline policy for what `EcsRunTaskOperator` needs (run tasks in both dev/prod clusters, pass the task's execution/task roles):
+Inline policy for what `EcsRunTaskOperator` needs (run tasks in both dev/prod clusters, pass the task's execution/task roles) plus permission to pull the custom Airflow image from ECR (step 1):
 
 ```bash
 cat > /tmp/airflow-ec2-ecs-policy.json <<'EOF'
@@ -67,6 +86,16 @@ cat > /tmp/airflow-ec2-ecs-policy.json <<'EOF'
         "arn:aws:iam::904464083417:role/dataplatform_ecs_task_execution_role_dev",
         "arn:aws:iam::904464083417:role/dataplatform_airflow"
       ]
+    },
+    {
+      "Effect": "Allow",
+      "Action": "ecr:GetAuthorizationToken",
+      "Resource": "*"
+    },
+    {
+      "Effect": "Allow",
+      "Action": ["ecr:BatchGetImage", "ecr:GetDownloadUrlForLayer", "ecr:BatchCheckLayerAvailability"],
+      "Resource": "arn:aws:ecr:us-east-1:904464083417:repository/camara-airflow"
     }
   ]
 }
@@ -90,7 +119,7 @@ aws iam add-role-to-instance-profile \
   --role-name dataplatform_airflow_ec2
 ```
 
-## 2. Security group (no inbound rules)
+## 3. Security group (no inbound rules)
 
 The instance is managed exclusively through SSM Session Manager (shell access and UI port-forwarding both tunnel through the SSM agent, bypassing the security group entirely) — so no inbound rule is needed at all, not even for SSH or port 8080.
 
@@ -103,15 +132,18 @@ aws ec2 create-security-group \
 
 (Leave the default egress-all-allowed rule; don't add any ingress rule.)
 
-## 3. User-data bootstrap script
+## 4. User-data bootstrap script
 
 ```bash
 cat > /tmp/airflow-ec2-user-data.sh <<'EOF'
 #!/bin/bash
 set -euxo pipefail
 
-dnf install -y docker git
+# cronie: Amazon Linux 2023 doesn't ship cron by default (no /etc/cron.d
+# even exists until this is installed) — needed for the DAG-sync job below.
+dnf install -y docker git cronie
 systemctl enable --now docker
+systemctl enable --now crond
 usermod -aG docker ec2-user
 
 DOCKER_CONFIG=/usr/local/lib/docker/cli-plugins
@@ -120,22 +152,35 @@ curl -SL https://github.com/docker/compose/releases/latest/download/docker-compo
   -o "$DOCKER_CONFIG/docker-compose"
 chmod +x "$DOCKER_CONFIG/docker-compose"
 
+# Pull the custom image (step 1) using the instance role's credentials —
+# no static keys involved.
+aws ecr get-login-password --region us-east-1 | \
+  docker login --username AWS --password-stdin 904464083417.dkr.ecr.us-east-1.amazonaws.com
+
 mkdir -p /opt/camara-senado-data-ingestion
-git clone https://github.com/DamodaraBarbosa/camara-senado-data-ingestion.git /opt/camara-senado-data-ingestion
+git clone -b main https://github.com/DamodaraBarbosa/camara-senado-data-ingestion.git /opt/camara-senado-data-ingestion
 
 cd /opt/camara-senado-data-ingestion/airflow
+
+# The webserver/scheduler containers run as uid 50000 (see
+# docker-compose-airflow.prod.yml); the bind-mounted dirs below are created
+# by this script (running as root) and must be writable by that uid, or
+# Airflow fails to create its log directories and crash-loops.
+mkdir -p dags logs plugins
+chown -R 50000:0 dags logs plugins
+
 docker compose -f docker-compose-airflow.prod.yml up -d
 
 # Keep DAG code current: Airflow's own scheduler re-parses the dags/ folder
 # periodically, so a plain `git pull` is enough — no container restart needed
 # for DAG-only changes.
 cat > /etc/cron.d/camara-dags-sync <<'CRON'
-*/15 * * * * root cd /opt/camara-senado-data-ingestion && git pull -q origin develop >> /var/log/camara-dags-sync.log 2>&1
+*/15 * * * * root cd /opt/camara-senado-data-ingestion && git pull -q origin main >> /var/log/camara-dags-sync.log 2>&1
 CRON
 EOF
 ```
 
-## 4. Launch the instance
+## 5. Launch the instance
 
 Reuse one of the subnets already used by the Fargate tasks (`airflow/dags/camera_ingestion_dag.py:23-30`) — same VPC, already has `assignPublicIp: ENABLED` for outbound internet access (ECR, GitHub, SSM endpoints):
 
@@ -148,7 +193,7 @@ aws ec2 run-instances \
   --image-id "$AMI_ID" \
   --instance-type t3.micro \
   --subnet-id subnet-084a2fb67517887b4 \
-  --security-group-ids <SG_ID_FROM_STEP_2> \
+  --security-group-ids <SG_ID_FROM_STEP_3> \
   --iam-instance-profile Name=dataplatform_airflow_ec2_profile \
   --associate-public-ip-address \
   --block-device-mappings 'DeviceName=/dev/xvda,Ebs={VolumeSize=20,VolumeType=gp3}' \
@@ -157,7 +202,9 @@ aws ec2 run-instances \
   --region us-east-1
 ```
 
-## 5. First access (via SSM, no SSH key needed)
+`t3.micro` is fine now that the provider is baked into the image at build time (step 1) rather than reinstalled via pip on every container start — the earlier crash-loop was caused specifically by that repeated install exhausting CPU credits, not by the instance size itself.
+
+## 6. First access (via SSM, no SSH key needed)
 
 Wait ~2 minutes for SSM registration and the bootstrap script to finish, then:
 
@@ -172,9 +219,9 @@ cd /opt/camara-senado-data-ingestion/airflow
 docker compose -f docker-compose-airflow.prod.yml ps
 ```
 
-If the user-data script failed partway (check `/var/log/cloud-init-output.log`), rerun the `git clone` / `docker compose up -d` commands from step 3 manually.
+If the user-data script failed partway (check `/var/log/cloud-init-output.log`), rerun the `docker login` / `git clone` / `chown` / `docker compose up -d` commands from step 4 manually.
 
-## 6. Access the Airflow UI (SSM port-forwarding, no public port)
+## 7. Access the Airflow UI (SSM port-forwarding, no public port)
 
 From your own machine (no inbound security group rule required — SSM tunnels this directly):
 
@@ -188,11 +235,11 @@ aws ssm start-session \
 
 Then open http://localhost:8080 (user `airflow` / password `airflow` — same as the local dev stack; consider changing it via the UI after first login).
 
-## 7. Validate
+## 8. Validate
 
-1. `docker compose -f docker-compose-airflow.prod.yml ps` shows `postgres-airflow`, `webserver`, `scheduler` all healthy.
+1. `docker compose -f docker-compose-airflow.prod.yml ps` shows `postgres-airflow`, `webserver`, `scheduler` all healthy, with stable (not repeatedly resetting) uptimes.
 2. Via the port-forwarded UI: both `camara_ingestion_pipeline` and `camara_ingestion_pipeline_prod` DAGs are visible; the prod one already shows schedule `0 6 * * 0`.
 3. Manually trigger a lightweight bundle (e.g. `legislaturas`) from this instance's UI, then confirm from your own machine: `aws ecs list-tasks --cluster dataplatform-ecs-cluster-prod --region us-east-1` shows the task running/succeeded — this validates the instance role credentials (no mounted `~/.aws/credentials`, no static keys) work for `EcsRunTaskOperator`.
 4. `aws ec2 reboot-instances --instance-ids <INSTANCE_ID> --region us-east-1`, wait, reconnect via SSM, confirm `docker compose ps` shows the stack back up on its own (Docker's `restart: always` policy plus `docker.service` enabled at boot).
-5. Push a trivial DAG change to `develop`, wait for the next cron cycle (≤15 min), and confirm the UI reflects it without any manual restart.
+5. Merge a trivial DAG change into `main`, wait for the next cron cycle (≤15 min), and confirm the UI reflects it without any manual restart.
 6. Stop the local docker-compose Airflow stack on your own machine and confirm the following Sunday's scheduled run fires from this EC2 instance instead (check Airflow's UI run history or `airflow/logs/dag_id=camara_ingestion_pipeline_prod/run_id=scheduled__.../` on the instance).
