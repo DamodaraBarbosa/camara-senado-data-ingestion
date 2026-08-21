@@ -1,0 +1,87 @@
+# Airflow configuration for the production host (dedicated EC2 instance).
+# See docs/PROD_AIRFLOW_EC2_RUNBOOK.md for how this instance is provisioned.
+#
+# Standalone file (not merged with docker-compose-airflow.yml): compose merges
+# list-type fields like `volumes` by target path and only appends/replaces
+# matching entries, it does not let an override *remove* an entry the base
+# file defines — so dropping the ~/.aws/credentials mount safely requires a
+# separate file rather than `-f docker-compose-airflow.yml -f ...prod.yml`.
+#
+# Usage: docker compose -f docker-compose-airflow.prod.yml up -d
+#
+# Unlike the dev file, no ~/.aws/credentials mount and no
+# AWS_SHARED_CREDENTIALS_FILE env var: boto3 inside the containers picks up
+# credentials automatically from the EC2 instance's IAM role via IMDS.
+version: '3.8'
+
+x-airflow-common:
+  &airflow-common
+  image: apache/airflow:2.8.1-python3.11
+  environment:
+    &airflow-common-env
+    AIRFLOW__CORE__EXECUTOR: LocalExecutor
+    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres-airflow:5432/airflow
+    AIRFLOW__CORE__FERNET_KEY: ''
+    AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: 'true'
+    AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
+    AIRFLOW__API__AUTH_BACKENDS: 'airflow.api.auth.backend.basic_auth,airflow.api.auth.backend.session'
+    AWS_DEFAULT_REGION: us-east-1
+    # Base image ships without provider packages; EcsRunTaskOperator needs this.
+    _PIP_ADDITIONAL_REQUIREMENTS: apache-airflow-providers-amazon
+  volumes:
+    - ./dags:/opt/airflow/dags
+    - ./logs:/opt/airflow/logs
+    - ./plugins:/opt/airflow/plugins
+  user: "${AIRFLOW_UID:-50000}:0"
+  depends_on:
+    postgres-airflow:
+      condition: service_healthy
+
+services:
+  postgres-airflow:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: airflow
+      POSTGRES_DB: airflow
+    volumes:
+      - postgres_airflow_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U airflow"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: always
+
+  webserver:
+    <<: *airflow-common
+    command: webserver
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    restart: always
+
+  scheduler:
+    <<: *airflow-common
+    command: scheduler
+    restart: always
+
+  airflow-init:
+    <<: *airflow-common
+    command: version
+    environment:
+      <<: *airflow-common-env
+      _AIRFLOW_DB_UPGRADE: 'true'
+      _AIRFLOW_WWW_USER_CREATE: 'true'
+      _AIRFLOW_WWW_USER_USERNAME: airflow
+      _AIRFLOW_WWW_USER_PASSWORD: airflow
+    user: "0:0"
+    volumes:
+      - ./dags:/opt/airflow/dags
+
+volumes:
+  postgres_airflow_data:
