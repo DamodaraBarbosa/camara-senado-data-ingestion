@@ -28,7 +28,8 @@ Reference document to optimize future work in this repository. Describes structu
 │   │   └── config/
 │   │       ├── bundles_config.dev.json  # Cluster/task-def for dev
 │   │       └── bundles_config.prod.json # Cluster/task-def for prod (placeholder)
-│   └── docker-compose-airflow.yml       # Local Airflow (dev mode)
+│   ├── docker-compose-airflow.yml       # Local Airflow (dev mode)
+│   └── docker-compose-airflow.prod.yml  # Airflow for the prod EC2 host (IAM role creds, no SSH)
 │
 ├── .github/workflows/
 │   └── ci.yml                   # GitHub Actions: lint, test, deploy-dev, deploy-prod
@@ -38,7 +39,8 @@ Reference document to optimize future work in this repository. Describes structu
 │   └── {category}/test_*.py
 │
 ├── docs/
-│   └── PROD_DEPLOY_RUNBOOK.md  # Manual checklist for prod infrastructure
+│   ├── PROD_DEPLOY_RUNBOOK.md       # Manual checklist for prod ingestion infra (ECS/S3/IAM)
+│   └── PROD_AIRFLOW_EC2_RUNBOOK.md  # Manual checklist for the prod Airflow EC2 host
 │
 ├── Dockerfile                   # Multi-stage build, env vars for BUNDLE override
 ├── Makefile                     # build, up, down, test, push-ecr, etc.
@@ -200,14 +202,14 @@ camara_ingestion_pipeline = build_dag(
     dag_id="camara_ingestion_pipeline",
     config_path="bundles_config.dev.json",
     s3_bucket="dataplatform-camara-dev-db",
-    schedule_interval="@weekly"
+    schedule_interval=None  # Manual only — dev is for ad hoc testing
 )
 
 camara_ingestion_pipeline_prod = build_dag(
     dag_id="camara_ingestion_pipeline_prod",
     config_path="bundles_config.prod.json",
     s3_bucket="dataplatform-camara-prod-db",
-    schedule_interval=None  # Manual only until prod infra exists
+    schedule_interval="0 6 * * 0"  # Every Sunday 06:00 UTC
 )
 ```
 
@@ -383,8 +385,9 @@ export CAMARA_CACHE_DIR=/tmp/camara-cache
 
 ### Monitoring Extractions
 
-- **Airflow UI**: http://localhost:8080 (dev) — view DAG runs, task logs, retries.
-- **Task logs**: `airflow/logs/dag_id=.../run_id=.../task_id=...` (local dev mode).
+- **Airflow UI (dev)**: http://localhost:8080 — local docker-compose, view DAG runs, task logs, retries.
+- **Airflow UI (prod)**: runs on a dedicated always-on EC2 instance (see `docs/PROD_AIRFLOW_EC2_RUNBOOK.md`), reachable only via SSM Session Manager port-forwarding (no public inbound port) — no local machine needs to stay on for the weekly schedule to fire.
+- **Task logs**: `airflow/logs/dag_id=.../run_id=.../task_id=...` (dev: local filesystem; prod: on the EC2 instance's own volume).
 - **CloudWatch**: `/ecs/dataplatform-ingestion-task-{dev,prod}` (prod/fargate).
 - **S3 output**: `s3://dataplatform-camara-{dev,prod}-db/raw/{bundle}/{extractor}/` — files named `{extractor}_{run_id}.json`.
 
@@ -392,7 +395,7 @@ export CAMARA_CACHE_DIR=/tmp/camara-cache
 
 1. **Logging**: Currently uses `print()` → CloudWatch. Could migrate to `logging` module + structured JSON logs.
 2. **Linting**: Only flake8; no black/isort/mypy (could add to requirements-dev.txt later).
-3. **Prod infrastructure**: Placeholder only; real provisioning via `docs/PROD_DEPLOY_RUNBOOK.md`.
+3. **Prod infrastructure**: ECS cluster, task definition, S3 bucket and IAM roles are provisioned and running real weekly ingestion (see `docs/PROD_DEPLOY_RUNBOOK.md`). The Airflow scheduler/webserver itself runs on a dedicated EC2 instance rather than MWAA (cost — MWAA bills a fixed hourly rate even when idle) — see `docs/PROD_AIRFLOW_EC2_RUNBOOK.md`. No infra-as-code yet; both runbooks are manual AWS CLI checklists.
 4. **Caching**: In-memory for extractors; could add distributed cache (Redis) for cross-task deps.
 5. **Monitoring**: No metrics/traces yet; could integrate with DataDog/New Relic.
 
