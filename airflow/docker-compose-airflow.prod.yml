@@ -16,6 +16,16 @@
 # Uses a custom-built image (airflow/Dockerfile) with apache-airflow-providers-amazon
 # baked in, instead of _PIP_ADDITIONAL_REQUIREMENTS — see that Dockerfile's
 # comment for why (CPU-credit exhaustion / crash loop on small instances).
+#
+# The webserver is NOT part of the default `up -d` set (see its `profiles`
+# below) and the scheduler is tuned down (parsing_processes/reparse interval):
+# running gunicorn's 4 default workers plus a scheduler re-parsing this DAG
+# file (it dynamically builds ~60 EcsRunTaskOperator tasks) every 30s pegged
+# CPU at 100% and crash-looped on this instance's 2 vCPUs, confirmed live via
+# SSM (load average 30+, no swap/OOM involved). The actual requirement is
+# just the scheduler firing the weekly cron — the UI is a convenience, not
+# on the critical path, so it only runs on demand (see
+# docs/PROD_AIRFLOW_EC2_RUNBOOK.md).
 version: '3.8'
 
 x-airflow-common:
@@ -30,6 +40,9 @@ x-airflow-common:
     AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
     AIRFLOW__API__AUTH_BACKENDS: 'airflow.api.auth.backend.basic_auth,airflow.api.auth.backend.session'
     AWS_DEFAULT_REGION: us-east-1
+    # Only one weekly-scheduled DAG, no need to near-real-time reparse it.
+    AIRFLOW__SCHEDULER__MIN_FILE_PROCESS_INTERVAL: '300'
+    AIRFLOW__SCHEDULER__PARSING_PROCESSES: '1'
   volumes:
     - ./dags:/opt/airflow/dags
     - ./logs:/opt/airflow/logs
@@ -55,8 +68,11 @@ services:
       retries: 5
     restart: always
 
+  # Not started by `docker compose up -d`. Start on demand to check the UI:
+  # docker compose -f docker-compose-airflow.prod.yml --profile ui up -d webserver
   webserver:
     <<: *airflow-common
+    profiles: ["ui"]
     command: webserver
     ports:
       - "8080:8080"

@@ -221,9 +221,17 @@ docker compose -f docker-compose-airflow.prod.yml ps
 
 If the user-data script failed partway (check `/var/log/cloud-init-output.log`), rerun the `docker login` / `git clone` / `chown` / `docker compose up -d` commands from step 4 manually.
 
-## 7. Access the Airflow UI (SSM port-forwarding, no public port)
+## 7. Access the Airflow UI (on demand, SSM port-forwarding, no public port)
 
-From your own machine (no inbound security group rule required — SSM tunnels this directly):
+`docker compose up -d` (step 4) only starts `postgres-airflow` and `scheduler` — the `webserver` service is under the `ui` Compose profile and is **not** part of that default set. Running gunicorn's 4 default workers alongside the scheduler re-parsing `camera_ingestion_dag.py` (it dynamically builds ~60 `EcsRunTaskOperator` tasks) every 30s pegged this `t3.micro`'s 2 vCPUs at 100% and crash-looped, confirmed live via SSM (`load average` 30+, no swap/OOM — genuine CPU contention). The actual requirement is just the scheduler firing the weekly cron; the UI is a convenience, so it only runs when you ask for it:
+
+```bash
+aws ssm start-session --target <INSTANCE_ID> --region us-east-1
+cd /opt/camara-senado-data-ingestion/airflow
+docker compose -f docker-compose-airflow.prod.yml --profile ui up -d webserver
+```
+
+Then, from your own machine (no inbound security group rule required — SSM tunnels this directly):
 
 ```bash
 aws ssm start-session \
@@ -233,12 +241,18 @@ aws ssm start-session \
   --region us-east-1
 ```
 
-Then open http://localhost:8080 (user `airflow` / password `airflow` — same as the local dev stack; consider changing it via the UI after first login).
+Open http://localhost:8080 (user `airflow` / password `airflow` — same as the local dev stack; consider changing it via the UI after first login). When done, stop it so the instance goes back to its light footprint:
+
+```bash
+docker compose -f docker-compose-airflow.prod.yml --profile ui stop webserver
+```
+
+If, after this tuning, `load average` (via `uptime`) still stays consistently high even with the webserver stopped, the next step would be resizing to `t3.small` — not attempted here since tuning alone resolved it.
 
 ## 8. Validate
 
-1. `docker compose -f docker-compose-airflow.prod.yml ps` shows `postgres-airflow`, `webserver`, `scheduler` all healthy, with stable (not repeatedly resetting) uptimes.
-2. Via the port-forwarded UI: both `camara_ingestion_pipeline` and `camara_ingestion_pipeline_prod` DAGs are visible; the prod one already shows schedule `0 6 * * 0`.
+1. `docker compose -f docker-compose-airflow.prod.yml ps` shows only `postgres-airflow` and `scheduler` healthy by default (no `webserver` — see step 7), with stable (not repeatedly resetting) uptimes. `uptime` shows a `load average` well under 2.0 (2 vCPUs) a few minutes after startup.
+2. Start the webserver on demand (step 7): both `camara_ingestion_pipeline` and `camara_ingestion_pipeline_prod` DAGs are visible; the prod one already shows schedule `0 6 * * 0`. Stop it again afterward and confirm `load average` drops back down.
 3. Manually trigger a lightweight bundle (e.g. `legislaturas`) from this instance's UI, then confirm from your own machine: `aws ecs list-tasks --cluster dataplatform-ecs-cluster-prod --region us-east-1` shows the task running/succeeded — this validates the instance role credentials (no mounted `~/.aws/credentials`, no static keys) work for `EcsRunTaskOperator`.
 4. `aws ec2 reboot-instances --instance-ids <INSTANCE_ID> --region us-east-1`, wait, reconnect via SSM, confirm `docker compose ps` shows the stack back up on its own (Docker's `restart: always` policy plus `docker.service` enabled at boot).
 5. Merge a trivial DAG change into `main`, wait for the next cron cycle (≤15 min), and confirm the UI reflects it without any manual restart.
