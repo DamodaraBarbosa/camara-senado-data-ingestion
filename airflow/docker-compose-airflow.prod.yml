@@ -43,6 +43,17 @@ x-airflow-common:
     # Only one weekly-scheduled DAG, no need to near-real-time reparse it.
     AIRFLOW__SCHEDULER__MIN_FILE_PROCESS_INTERVAL: '300'
     AIRFLOW__SCHEDULER__PARSING_PROCESSES: '1'
+    # LocalExecutor forks one Python subprocess per running task instance
+    # (~150MB RSS each, mostly boto3/Airflow imports for EcsRunTaskOperator's
+    # polling loop). The DAG's ~60 tasks include many with no dependencies
+    # (root task of each of the 10 bundles), so on a fresh trigger the
+    # scheduler tried to run over a dozen of them at once and OOM-killed
+    # itself and the executor on this instance's 913MB RAM (confirmed live
+    # via SSM: docker stats + dmesg oom-kill entries). Capping concurrency
+    # trades a longer total DAG runtime (fine — it's a weekly batch job with
+    # no downstream waiting in real time) for staying inside that RAM budget.
+    AIRFLOW__CORE__PARALLELISM: '2'
+    AIRFLOW__CORE__MAX_ACTIVE_TASKS_PER_DAG: '2'
   volumes:
     - ./dags:/opt/airflow/dags
     - ./logs:/opt/airflow/logs
