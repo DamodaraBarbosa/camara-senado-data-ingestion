@@ -70,6 +70,13 @@ services:
 
   # Not started by `docker compose up -d`. Start on demand to check the UI:
   # docker compose -f docker-compose-airflow.prod.yml --profile ui up -d webserver
+  #
+  # restart: "no" is deliberate: `profiles` only gates the initial `up -d`,
+  # it does not stop dockerd from restarting an already-created container on
+  # host reboot. With `restart: always` here, a webserver started once for a
+  # UI check kept coming back on every EC2 reboot alongside the scheduler,
+  # and gunicorn's workers + scheduler + postgres together OOM-crashed this
+  # instance's limited RAM, taking the scheduler down with it.
   webserver:
     <<: *airflow-common
     profiles: ["ui"]
@@ -81,7 +88,7 @@ services:
       interval: 30s
       timeout: 10s
       retries: 5
-    restart: always
+    restart: "no"
 
   scheduler:
     <<: *airflow-common
