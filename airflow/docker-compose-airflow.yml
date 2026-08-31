@@ -4,7 +4,12 @@ version: '3.8'
 
 x-airflow-common:
   &airflow-common
-  image: apache/airflow:2.8.1-python3.11
+  # Builds the same image prod runs (airflow/Dockerfile) instead of pulling the
+  # stock one and installing the provider at every container start. Deferrable
+  # execution needs the [aiobotocore] extra pinned in that Dockerfile, and
+  # sharing the image is what makes local a real rehearsal for the EC2 host.
+  build: .
+  image: camara-airflow:local
   environment:
     &airflow-common-env
     AIRFLOW__CORE__EXECUTOR: LocalExecutor
@@ -16,8 +21,9 @@ x-airflow-common:
     # AWS credentials configuration
     AWS_DEFAULT_REGION: us-east-1
     AWS_SHARED_CREDENTIALS_FILE: /home/airflow/.aws/credentials
-    # Base image ships without provider packages; EcsRunTaskOperator needs this.
-    _PIP_ADDITIONAL_REQUIREMENTS: apache-airflow-providers-amazon
+    # Match prod: EcsRunTaskOperator defers instead of blocking a LocalExecutor
+    # fork for the whole Fargate task. Needs the triggerer service below.
+    AIRFLOW__OPERATORS__DEFAULT_DEFERRABLE: 'true'
   volumes:
     - ./dags:/opt/airflow/dags
     - ./logs:/opt/airflow/logs
@@ -59,6 +65,12 @@ services:
   scheduler:
     <<: *airflow-common
     command: scheduler
+    restart: always
+
+  # Without this, deferred tasks sit in the `deferred` state forever.
+  triggerer:
+    <<: *airflow-common
+    command: triggerer
     restart: always
 
   airflow-init:

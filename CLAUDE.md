@@ -30,7 +30,7 @@ Reference document to optimize future work in this repository. Describes structu
 │   │       └── bundles_config.prod.json # Cluster/task-def for prod (placeholder)
 │   ├── docker-compose-airflow.yml       # Local Airflow (dev mode)
 │   ├── docker-compose-airflow.prod.yml  # Airflow for the prod EC2 host (IAM role creds, no SSH)
-│   └── Dockerfile                       # Custom Airflow image (amazon provider baked in, not pip-at-boot)
+│   └── Dockerfile                       # Custom Airflow image (amazon provider + [aiobotocore] baked in, pinned to Airflow 2.8.1 constraints)
 │
 ├── .github/workflows/
 │   └── ci.yml                   # GitHub Actions: lint, test, deploy-dev, deploy-prod
@@ -387,7 +387,7 @@ export CAMARA_CACHE_DIR=/tmp/camara-cache
 ### Monitoring Extractions
 
 - **Airflow UI (dev)**: http://localhost:8080 — local docker-compose, view DAG runs, task logs, retries.
-- **Airflow UI (prod)**: the scheduler runs 24/7 on a dedicated EC2 instance (see `docs/PROD_AIRFLOW_EC2_RUNBOOK.md`) so the weekly schedule never depends on a local machine, but the webserver itself only runs on demand (`docker compose --profile ui up -d webserver`, reachable only via SSM Session Manager port-forwarding, no public inbound port) — running it 24/7 alongside the scheduler pegged this small instance's CPU.
+- **Airflow UI (prod)**: the scheduler and triggerer run 24/7 on a dedicated EC2 instance (see `docs/PROD_AIRFLOW_EC2_RUNBOOK.md`) so the weekly schedule never depends on a local machine, but the webserver itself only runs on demand (`docker compose --profile ui up -d webserver`, reachable only via SSM Session Manager port-forwarding, no public inbound port) — running it 24/7 alongside the scheduler pegged this small instance's CPU.
 - **Task logs**: `airflow/logs/dag_id=.../run_id=.../task_id=...` (dev: local filesystem; prod: on the EC2 instance's own volume).
 - **CloudWatch**: `/ecs/dataplatform-ingestion-task-{dev,prod}` (prod/fargate).
 - **S3 output**: `s3://dataplatform-camara-{dev,prod}-db/raw/{bundle}/{extractor}/` — files named `{extractor}_{run_id}.json`.
@@ -397,6 +397,8 @@ export CAMARA_CACHE_DIR=/tmp/camara-cache
 1. **Logging**: Currently uses `print()` → CloudWatch. Could migrate to `logging` module + structured JSON logs.
 2. **Linting**: Only flake8; no black/isort/mypy (could add to requirements-dev.txt later).
 3. **Prod infrastructure**: ECS cluster, task definition, S3 bucket and IAM roles are provisioned and running real weekly ingestion (see `docs/PROD_DEPLOY_RUNBOOK.md`). The Airflow scheduler/webserver itself runs on a dedicated EC2 instance rather than MWAA (cost — MWAA bills a fixed hourly rate even when idle) — see `docs/PROD_AIRFLOW_EC2_RUNBOOK.md`. That instance runs a custom-built image (`airflow/Dockerfile`, pushed to the `camara-airflow` ECR repo) with `apache-airflow-providers-amazon` baked in — using `_PIP_ADDITIONAL_REQUIREMENTS` there (fine for local dev) caused a CPU-credit exhaustion crash loop on the small EC2 instance, since it reinstalls the package via pip on every container start. Even after that fix, running the webserver 24/7 alongside the scheduler still pegged the `t3.micro`'s 2 vCPUs (gunicorn's 4 workers plus frequent DAG re-parsing); the webserver is now on-demand only (`profiles: ["ui"]` in `docker-compose-airflow.prod.yml`) and the scheduler's parsing frequency/process count is tuned down — see the "Access the Airflow UI" step in `docs/PROD_AIRFLOW_EC2_RUNBOOK.md`. No infra-as-code yet; both runbooks are manual AWS CLI checklists.
+
+   **Deferrable execution is what makes the DAG fit this instance.** `EcsRunTaskOperator` used to wait synchronously, so `LocalExecutor` held one forked Python subprocess (~150MB RSS) per task for the *entire* Fargate task duration just to poll `DescribeTasks` — `run_deputados_despesas` alone occupied a slot for 44 minutes. That forced `AIRFLOW__CORE__PARALLELISM: 2`, which stopped the OOM but roughly doubled wall clock (~100-110 min vs. 43-54 min with free parallelism). Prod now sets `AIRFLOW__OPERATORS__DEFAULT_DEFERRABLE: 'true'` and runs a `triggerer` service: the fork submits `ecs:RunTask`, defers, and exits within seconds, and all the waits become coroutines in one asyncio event loop. Two consequences to remember when changing this: the `triggerer` service is **mandatory** whenever that flag is on (deferred tasks otherwise hang in `deferred` forever), and the image must install the amazon provider with its `[aiobotocore]` extra (`TaskDoneTrigger.run()` uses `async_conn`). The host also needs a swapfile — see the runbook's user-data step.
 4. **Caching**: In-memory for extractors; could add distributed cache (Redis) for cross-task deps.
 5. **Monitoring**: No metrics/traces yet; could integrate with DataDog/New Relic.
 
@@ -410,3 +412,7 @@ export CAMARA_CACHE_DIR=/tmp/camara-cache
 | Extractor times out | Increase runner's timeout override in `bundles/{bundle}/app/runner.py` (e.g., `_TIMEOUT_OVERRIDES = {"despesas": 1800}`). |
 | Flake8 fails | Run `flake8 src/ --max-line-length=120` locally; fix unused imports, long lines. |
 | ECR push fails in CI | Check `AWS_DEV_DEPLOY_ROLE_ARN` / `AWS_PROD_DEPLOY_ROLE_ARN` secrets; ensure OIDC role exists in AWS. |
+| Tasks stuck in `deferred` forever | The `triggerer` service is not running. It is mandatory whenever `AIRFLOW__OPERATORS__DEFAULT_DEFERRABLE` is `true`. |
+| Deferred task fails immediately on an `aiobotocore` import | The image was built without the `[aiobotocore]` extra. Rebuild `airflow/Dockerfile` and redeploy (runbook step 9). |
+| Tasks stay `running` for the whole Fargate duration | `AIRFLOW__OPERATORS__DEFAULT_DEFERRABLE` did not take effect — check it is set in the compose env the container actually got. |
+| `airflow version` prints 3.x after an image rebuild | The pin/constraints in `airflow/Dockerfile` were bypassed. Installing the amazon provider unpinned upgrades Airflow across a major version and still exits 0. |

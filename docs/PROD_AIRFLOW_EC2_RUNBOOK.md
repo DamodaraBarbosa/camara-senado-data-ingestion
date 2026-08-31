@@ -8,6 +8,8 @@ Run the commands below with a user/role that has admin permission in AWS account
 
 The base `apache/airflow` image ships without the `apache-airflow-providers-amazon` package that `EcsRunTaskOperator` needs. Do **not** install it via `_PIP_ADDITIONAL_REQUIREMENTS` at container startup on this host: that reinstalls the package via pip on every single container start (webserver, scheduler, airflow-init), and on a small/burstable instance (`t3.micro`) that's enough repeated CPU load to exhaust CPU credits, throttle the instance to baseline, make the install even slower, blow past Airflow's internal startup retry limit, and crash-loop indefinitely (`restart: always` just repeats the expensive install forever). Bake the provider into the image once instead — see `airflow/Dockerfile`.
 
+That image also pins `apache-airflow==2.8.1` and installs against Apache's constraints file for this exact Airflow/Python pair, and installs the amazon provider with its `[aiobotocore]` extra. None of that is cosmetic: the extra is what `EcsRunTaskOperator`'s deferrable mode needs (its trigger opens `aiobotocore` clients), and without the pin plus constraints, pip resolving that extra will happily upgrade Airflow itself across a major version — 2.8.1 to 3.x — while still reporting a successful build. See `airflow/Dockerfile` for the measured details.
+
 Build from a machine with real (non-burstable) CPU — your own machine or CI, not the EC2 instance being provisioned:
 
 ```bash
@@ -139,6 +141,21 @@ cat > /tmp/airflow-ec2-user-data.sh <<'EOF'
 #!/bin/bash
 set -euxo pipefail
 
+# Swap. AL2023 boots with none, and this instance has 913MB of RAM shared by
+# postgres, the scheduler and the triggerer (~620-690MB resident between them)
+# plus the short-lived task subprocesses the scheduler forks during DAG fan-out
+# and completion. With no swap those bursts have nowhere to go and the kernel
+# OOM-killer picks a victim host-wide — which is how the scheduler died before.
+# 2GB on the existing 20GB gp3 volume costs nothing extra; swappiness=10 keeps
+# it as a safety valve rather than something the kernel reaches for routinely.
+dd if=/dev/zero of=/swapfile bs=1M count=2048
+chmod 600 /swapfile
+mkswap /swapfile
+swapon /swapfile
+echo '/swapfile none swap sw 0 0' >> /etc/fstab
+echo 'vm.swappiness=10' > /etc/sysctl.d/99-swap.conf
+sysctl -p /etc/sysctl.d/99-swap.conf
+
 # cronie: Amazon Linux 2023 doesn't ship cron by default (no /etc/cron.d
 # even exists until this is installed) — needed for the DAG-sync job below.
 dnf install -y docker git cronie
@@ -176,6 +193,13 @@ docker compose -f docker-compose-airflow.prod.yml up -d
 # for DAG-only changes.
 cat > /etc/cron.d/camara-dags-sync <<'CRON'
 */15 * * * * root cd /opt/camara-senado-data-ingestion && git pull -q origin main >> /var/log/camara-dags-sync.log 2>&1
+CRON
+
+# Airflow's task logs are a bind mount on this instance's 20GB volume and
+# nothing prunes them. A weekly sweep keeps a slow disk-full from taking the
+# scheduler down months from now.
+cat > /etc/cron.d/camara-airflow-logs <<'CRON'
+0 4 * * 1 root find /opt/camara-senado-data-ingestion/airflow/logs -type f -mtime +30 -delete
 CRON
 EOF
 ```
@@ -251,9 +275,45 @@ If, after this tuning, `load average` (via `uptime`) still stays consistently hi
 
 ## 8. Validate
 
-1. `docker compose -f docker-compose-airflow.prod.yml ps` shows only `postgres-airflow` and `scheduler` healthy by default (no `webserver` — see step 7), with stable (not repeatedly resetting) uptimes. `uptime` shows a `load average` well under 2.0 (2 vCPUs) a few minutes after startup.
+1. `docker compose -f docker-compose-airflow.prod.yml ps` shows `postgres-airflow`, `scheduler` and `triggerer` healthy by default (no `webserver` — see step 7), with stable (not repeatedly resetting) uptimes. `uptime` shows a `load average` well under 2.0 (2 vCPUs) a few minutes after startup. `free -m` shows the 2GB swapfile present and the three containers sitting around 620-690MB total in `docker stats`.
 2. Start the webserver on demand (step 7): both `camara_ingestion_pipeline` and `camara_ingestion_pipeline_prod` DAGs are visible; the prod one already shows schedule `0 6 * * 0`. Stop it again afterward and confirm `load average` drops back down.
 3. Manually trigger a lightweight bundle (e.g. `legislaturas`) from this instance's UI, then confirm from your own machine: `aws ecs list-tasks --cluster dataplatform-ecs-cluster-prod --region us-east-1` shows the task running/succeeded — this validates the instance role credentials (no mounted `~/.aws/credentials`, no static keys) work for `EcsRunTaskOperator`.
+   Tasks must reach the **`deferred`** state (pink in the UI) rather than staying `running` for the whole Fargate duration. `deferred` is the proof the wait moved out of the executor and into the triggerer; if tasks stay `running`, `AIRFLOW__OPERATORS__DEFAULT_DEFERRABLE` did not take effect. If they enter `deferred` and never leave, the triggerer is down or missing the `aiobotocore` extra — check `docker compose logs triggerer`.
 4. `aws ec2 reboot-instances --instance-ids <INSTANCE_ID> --region us-east-1`, wait, reconnect via SSM, confirm `docker compose ps` shows the stack back up on its own (Docker's `restart: always` policy plus `docker.service` enabled at boot).
 5. Merge a trivial DAG change into `main`, wait for the next cron cycle (≤15 min), and confirm the UI reflects it without any manual restart.
 6. Stop the local docker-compose Airflow stack on your own machine and confirm the following Sunday's scheduled run fires from this EC2 instance instead (check Airflow's UI run history or `airflow/logs/dag_id=camara_ingestion_pipeline_prod/run_id=scheduled__.../` on the instance).
+
+## 9. Applying changes to an instance that is already running
+
+Steps 1-8 provision a new host. This section is the update path, which the rest of the runbook did not cover: the DAG-sync cron only pulls `dags/`, so changes to `airflow/Dockerfile` or `docker-compose-airflow.prod.yml` need a deliberate redeploy, and the image tag is `:latest`, so `up -d` alone will not fetch a new build.
+
+**Build and push first** (from your own machine or CI — never on the burstable instance, see step 1):
+
+```bash
+docker build -t camara-airflow:latest -f airflow/Dockerfile airflow/
+aws ecr get-login-password --region us-east-1 | \
+  docker login --username AWS --password-stdin 904464083417.dkr.ecr.us-east-1.amazonaws.com
+docker tag camara-airflow:latest 904464083417.dkr.ecr.us-east-1.amazonaws.com/camara-airflow:latest
+docker push 904464083417.dkr.ecr.us-east-1.amazonaws.com/camara-airflow:latest
+```
+
+**Then, on the instance** (the compose file comes from `main`, so merge there first):
+
+```bash
+aws ssm start-session --target <INSTANCE_ID> --region us-east-1
+cd /opt/camara-senado-data-ingestion && sudo git pull origin main
+cd airflow
+aws ecr get-login-password --region us-east-1 | \
+  docker login --username AWS --password-stdin 904464083417.dkr.ecr.us-east-1.amazonaws.com
+docker compose -f docker-compose-airflow.prod.yml pull
+docker compose -f docker-compose-airflow.prod.yml up -d
+```
+
+**Backfill the swapfile.** An instance provisioned before the swap was added to the user-data script (step 4) does not have it, and that script does not re-run — it is a one-shot at first boot. Apply it by hand once, using the same commands from step 4 (`dd` … `sysctl -p`). Confirm with `free -m` that `Swap:` is no longer `0`. Do this **before** starting the triggerer: it adds roughly 300MB of resident memory to a 913MB host.
+
+**Confirm nothing moved that should not have.** The pinned install exists because an unpinned one silently upgraded Airflow across a major version:
+
+```bash
+docker compose -f docker-compose-airflow.prod.yml exec scheduler airflow version   # must print 2.8.1
+docker compose -f docker-compose-airflow.prod.yml exec scheduler pip check
+```
