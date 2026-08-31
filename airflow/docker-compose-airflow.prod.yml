@@ -26,6 +26,12 @@
 # just the scheduler firing the weekly cron — the UI is a convenience, not
 # on the critical path, so it only runs on demand (see
 # docs/PROD_AIRFLOW_EC2_RUNBOOK.md).
+#
+# Default `up -d` set: postgres-airflow, scheduler, triggerer. The triggerer is
+# what lets this fit on a 913MB instance at all — see the deferrable comment in
+# the env block below. The instance also needs a swapfile (runbook step 4);
+# these three sit around 620-690MB resident, and the transient task forks need
+# somewhere to go other than the OOM killer.
 version: '3.8'
 
 x-airflow-common:
@@ -43,17 +49,34 @@ x-airflow-common:
     # Only one weekly-scheduled DAG, no need to near-real-time reparse it.
     AIRFLOW__SCHEDULER__MIN_FILE_PROCESS_INTERVAL: '300'
     AIRFLOW__SCHEDULER__PARSING_PROCESSES: '1'
-    # LocalExecutor forks one Python subprocess per running task instance
-    # (~150MB RSS each, mostly boto3/Airflow imports for EcsRunTaskOperator's
-    # polling loop). The DAG's ~60 tasks include many with no dependencies
-    # (root task of each of the 10 bundles), so on a fresh trigger the
-    # scheduler tried to run over a dozen of them at once and OOM-killed
-    # itself and the executor on this instance's 913MB RAM (confirmed live
-    # via SSM: docker stats + dmesg oom-kill entries). Capping concurrency
-    # trades a longer total DAG runtime (fine — it's a weekly batch job with
-    # no downstream waiting in real time) for staying inside that RAM budget.
-    AIRFLOW__CORE__PARALLELISM: '2'
-    AIRFLOW__CORE__MAX_ACTIVE_TASKS_PER_DAG: '2'
+    # Deferrable execution, switched on here rather than in the DAG file: the
+    # operator reads this as the default for its `deferrable` argument, so the
+    # same DAG still runs in an environment that has no triggerer.
+    #
+    # This is what removes the OOM cause rather than compensating for it.
+    # Previously EcsRunTaskOperator waited synchronously, so LocalExecutor held
+    # one forked Python subprocess (~150MB RSS) per task for the *entire*
+    # Fargate task duration just to poll DescribeTasks — run_deputados_despesas
+    # alone occupied a slot for 44 minutes. With deferrable the fork submits
+    # ecs:RunTask, defers, and exits within seconds; the wait becomes one
+    # coroutine in the triggerer's asyncio loop. Slot occupancy per task drops
+    # from up to 44min to ~10s.
+    AIRFLOW__OPERATORS__DEFAULT_DEFERRABLE: 'true'
+    # Was 2 — a cap needed only because a waiting task cost a whole process.
+    # Now the forks are short-lived bursts during fan-out and completion, so
+    # this bounds a transient peak, not a 44-minute residency. Raise further
+    # only after measuring `docker stats` and swap usage on the instance.
+    AIRFLOW__CORE__PARALLELISM: '4'
+    AIRFLOW__CORE__MAX_ACTIVE_TASKS_PER_DAG: '4'
+    # Bounds concurrent triggers in the triggerer process (default 1000). Each
+    # one holds two aiobotocore client sessions (ECS + CloudWatch Logs), and
+    # the DAG's 23 dependency-free roots set the realistic peak.
+    AIRFLOW__TRIGGERER__DEFAULT_CAPACITY: '30'
+    # Every Airflow process (scheduler, triggerer, each task fork) builds its
+    # own connection pool. Defaults are 5 + 10 overflow each, which on 913MB
+    # buys nothing but postgres backends.
+    AIRFLOW__DATABASE__SQL_ALCHEMY_POOL_SIZE: '3'
+    AIRFLOW__DATABASE__SQL_ALCHEMY_MAX_OVERFLOW: '3'
   volumes:
     - ./dags:/opt/airflow/dags
     - ./logs:/opt/airflow/logs
@@ -66,6 +89,14 @@ x-airflow-common:
 services:
   postgres-airflow:
     image: postgres:15-alpine
+    # Stock defaults (shared_buffers=128MB, max_connections=100) assume a much
+    # bigger host. The Airflow pool settings above cap real usage near 24
+    # connections, so 40 leaves margin without reserving memory for 100.
+    command: postgres -c shared_buffers=48MB -c max_connections=40
+    # Deliberately generous for something expected to sit near 150MB: losing
+    # postgres takes Airflow down as surely as losing the scheduler, so this is
+    # a runaway fence, not a target to run close to.
+    mem_limit: 320m
     environment:
       POSTGRES_USER: airflow
       POSTGRES_PASSWORD: airflow
@@ -104,6 +135,21 @@ services:
   scheduler:
     <<: *airflow-common
     command: scheduler
+    restart: always
+
+  # Runs every deferred task's wait in a single asyncio event loop, replacing
+  # one ~150MB forked subprocess per in-flight task. Required whenever
+  # AIRFLOW__OPERATORS__DEFAULT_DEFERRABLE is true — without it, deferred tasks
+  # sit in the `deferred` state forever.
+  #
+  # mem_limit is a fence, not a target: if the triggerer ever leaks, it gets
+  # killed inside its own cgroup instead of the kernel OOM-killer picking a
+  # victim host-wide (which is how the scheduler died before). The scheduler is
+  # deliberately left unlimited — it is the process that must survive.
+  triggerer:
+    <<: *airflow-common
+    command: triggerer
+    mem_limit: 384m
     restart: always
 
   airflow-init:
