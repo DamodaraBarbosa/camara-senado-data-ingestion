@@ -285,7 +285,11 @@ If, after this tuning, `load average` (via `uptime`) still stays consistently hi
 
 ## 9. Applying changes to an instance that is already running
 
-Steps 1-8 provision a new host. This section is the update path, which the rest of the runbook did not cover: the DAG-sync cron only pulls `dags/`, so changes to `airflow/Dockerfile` or `docker-compose-airflow.prod.yml` need a deliberate redeploy, and the image tag is `:latest`, so `up -d` alone will not fetch a new build.
+Steps 1-8 provision a new host. This section is the update path, which the rest of the runbook did not cover, and the gap was not theoretical.
+
+The `camara-dags-sync` cron runs `git pull`, which updates the files on disk and nothing else. Docker does not re-read a compose file on its own, so **an environment change merged to `main` has no effect on a running container until someone recreates it.** On 2026-09-01 the scheduler container on this host was found still running with its 2026-08-22 configuration: `AIRFLOW__CORE__PARALLELISM` was absent entirely, meaning the concurrency cap from commit `45c67f8` had been merged, released, and never applied. The host OOM-killed the scheduler five times between Aug 30 and Aug 31 while that fix sat on disk, unapplied.
+
+Two things therefore always need a deliberate redeploy: changes to `docker-compose-airflow.prod.yml` (recreate the containers) and changes to `airflow/Dockerfile` (the tag is `:latest`, so `up -d` alone will not fetch a new build — you must `pull` first).
 
 **Build and push first** (from your own machine or CI — never on the burstable instance, see step 1):
 
