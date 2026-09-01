@@ -31,13 +31,24 @@
 # what lets this fit on a 913MB instance at all — see the deferrable comment in
 # the env block below.
 #
-# Measured on the instance (2026-09-01, idle, no DAG running): the scheduler
-# alone is 517MB RSS and postgres 37MB. Adding a triggerer puts the resident
-# floor around 800-850MB of 913MB before a single task fork exists. An earlier
-# revision of this comment guessed 620-690MB; that was optimistic. The swapfile
-# (runbook step 4) is therefore not a safety margin, it is what makes the set
-# runnable at all — the host had no swap and OOM-killed the scheduler five
-# times between Aug 30 and Aug 31 2026.
+# Measured on the instance through a full production run (2026-09-01,
+# 56 tasks, 42 minutes end to end):
+#
+#   scheduler 270MB   triggerer 218MB   postgres 31MB   = ~518MB resident
+#   peak swap in use 807MB of 2048MB
+#   minimum available RAM during the run 31MB
+#   oom-kills 0
+#
+# Two earlier revisions of this comment had this wrong in both directions:
+# 620-690MB was a guess, and 800-850MB came from reading a stale container
+# that had been up for ten days with default SQLAlchemy pools. The pool and
+# shared_buffers settings below are what actually brought the scheduler from
+# 517MB down to 270MB — the triggerer fits in the room that tuning freed.
+#
+# The swapfile (runbook step 4) is not a safety margin, it is what makes the
+# set runnable at all: 31MB of free RAM at peak means every burst lands in
+# swap. Before it existed the host OOM-killed the scheduler five times
+# between Aug 30 and Aug 31 2026 and then went unreachable for four days.
 version: '3.8'
 
 x-airflow-common:
@@ -73,12 +84,14 @@ x-airflow-common:
     # so this only caps how many forks exist during fan-out and completion,
     # each for ~10s rather than up to 44 minutes.
     #
-    # Kept at 2 rather than raised, because of the measured floor above: with
-    # ~800-850MB already resident, four concurrent ~150MB forks would all page
-    # to swap at once. At 2, fanning out all 56 tasks costs about 5 minutes,
-    # which is noise against a ~45min critical path — the extra parallelism
-    # buys very little and costs real memory. Raise only after watching
-    # `docker stats` and `free -m` through a full run.
+    # Kept at 2, now confirmed by a full run rather than argued from an
+    # estimate. That run finished 56/56 in 42 minutes with peak swap at 807MB
+    # and only 31MB of RAM free at its tightest — there is no headroom to
+    # spend on more concurrent forks. And it would buy nothing: the critical
+    # path is run_deputados_despesas at ~44 minutes, so the DAG is now bound
+    # by how long the Fargate work actually takes, not by fan-out. For
+    # reference, that 42 minutes beats the 43-54 minutes the same DAG took on
+    # a laptop with parallelism uncapped.
     AIRFLOW__CORE__PARALLELISM: '2'
     AIRFLOW__CORE__MAX_ACTIVE_TASKS_PER_DAG: '2'
     # Bounds concurrent triggers in the triggerer process (default 1000). Each
