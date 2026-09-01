@@ -24,6 +24,8 @@ from pathlib import Path
 import aiohttp
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 
+from utils.budget import task_deadline
+
 # No `total`: a large file may legitimately take minutes. What detects hanging
 # is `sock_read` — silence on the socket, not total duration.
 _BULK_TIMEOUT = aiohttp.ClientTimeout(total=None, connect=30, sock_read=60)
@@ -42,6 +44,18 @@ class BulkNotFound(RuntimeError):
 
 class BulkDownloadIncomplete(RuntimeError):
     """Truncated download — never publish as complete."""
+
+
+class BulkParseTimeout(RuntimeError):
+    """O parse do CSV estourou o orçamento da task e foi abortado.
+
+    Existe porque ``asyncio.wait_for`` **não** cancela uma thread: ele cancela
+    apenas o ``await``. Um ``asyncio.to_thread`` que estoura o timeout deixa a
+    thread rodando, e o ``ThreadPoolExecutor`` padrão a aguarda no atexit — o
+    processo sobrevive ao próprio timeout. Observado em produção: cinco
+    extractors terminando entre 911s e 2342s sob um ``wait_for`` de 600s.
+    A checagem cooperativa em ``_read_rows_sync`` é o que torna o timeout real.
+    """
 
 
 class BulkSchemaChanged(RuntimeError):
@@ -287,17 +301,25 @@ class CamaraBulkClient:
 
     # ------------------------------------------------------------------ leitura
 
-    async def read_rows(self, dataset: str, partition=None, *, transform=None, row_filter=None):
+    async def read_rows(self, dataset: str, partition=None, *, transform=None,
+                        row_filter=None, deadline=None):
         """Baixa (se preciso) e faz o parse do CSV.
 
-        O parse roda em thread separada porque ``csv`` é síncrono e **não é
-        preemptável** pelo ``asyncio.wait_for(600)`` do runner — um parse longo
-        no event loop estouraria o timeout duro exatamente como aconteceu com
-        ``votacoes/votacoes``.
+        O parse roda em thread separada para não bloquear o event loop, mas
+        isso **não** o torna cancelável: ``asyncio.wait_for`` cancela o
+        ``await``, não a thread. Por isso o parse checa um ``Deadline``
+        cooperativamente e aborta sozinho — sem isso o processo sobrevive ao
+        próprio timeout (ver ``BulkParseTimeout``).
+
+        O ``deadline`` default vem de ``budget.task_deadline()``, derivado do
+        timeout real do runner, então o comportamento vale para todos os
+        chamadores sem que cada um precise passá-lo.
         """
         path = await self.ensure_file(dataset, partition)
         spec = DATASETS[dataset]
-        return await asyncio.to_thread(_read_rows_sync, path, spec, transform, row_filter)
+        if deadline is None:
+            deadline = task_deadline()
+        return await asyncio.to_thread(_read_rows_sync, path, spec, transform, row_filter, deadline)
 
 
 def _content_range_total(header: str):
@@ -335,12 +357,27 @@ def _assert_header(fieldnames, spec: DatasetSpec):
         )
 
 
-def _read_rows_sync(path: Path, spec: DatasetSpec, transform, row_filter):
+# A cada quantas linhas o parse checa o orçamento. Precisa ser grande o
+# bastante para o custo da checagem sumir no ruído (time.monotonic por linha
+# num arquivo de 1,1M linhas seria mensurável) e pequeno o bastante para o
+# abort acontecer em segundos, não minutos.
+_DEADLINE_CHECK_EVERY = 20_000
+
+
+def _read_rows_sync(path: Path, spec: DatasetSpec, transform, row_filter, deadline=None):
     rows = []
     with _open_text(path, spec) as fh:
         reader = csv.DictReader(fh, delimiter=spec.delimiter)
         _assert_header(reader.fieldnames, spec)
-        for row in reader:
+        for n, row in enumerate(reader):
+            if (deadline is not None
+                    and n % _DEADLINE_CHECK_EVERY == 0
+                    and n
+                    and deadline.expired):
+                raise BulkParseTimeout(
+                    f"{spec.name}: parse abortado em {n} linhas apos "
+                    f"{deadline.elapsed:.0f}s (orcamento {deadline.budget_s:.0f}s)"
+                )
             if row_filter is not None and not row_filter(row):
                 continue
             # transform aqui dentro descarta a linha crua na hora, mantendo o
