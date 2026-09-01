@@ -8,12 +8,21 @@ CONFIG_DIR = Path(__file__).resolve().parent / "config"
 
 # Task default arguments
 DEFAULT_ARGS = {
-    "Owner": "airflow",
+    # Lowercase: "Owner" is not a recognised key, so Airflow silently ignored it
+    # and fell back to the default owner (also "airflow", which masked the typo).
+    "owner": "airflow",
     "depends_on_past": False,
     "email_on_failure": False,
     "start_date": datetime(2024, 1, 1),
     "retries": 1,
     "retry_delay": timedelta(minutes=5),
+    # Backstop on the Airflow side. The runners wrap their work in
+    # asyncio.wait_for(), but CamaraBulkClient dispatches CSV parsing via
+    # asyncio.to_thread and cancelling that future does not stop the thread —
+    # run_votacoes_votos has finished at 27min under a hardcoded 600s timeout.
+    # So this is the only ceiling that actually holds. Sized above the
+    # waiter ceiling below so the waiter reports the timeout first.
+    "execution_timeout": timedelta(minutes=110),
 }
 
 # Rede compartilhada entre dev e prod: mesma VPC/subnets/security group até
@@ -51,6 +60,7 @@ def build_dag(dag_id: str, config_path: Path, s3_bucket: str, schedule_interval)
         description="Pipeline for ingesting data from the Brazilian Chamber of Deputies",
         schedule_interval=schedule_interval,
         catchup=False,
+        max_active_runs=1,
         tags=["camara", "data_ingestion", "fargate"],
     )
 
@@ -100,6 +110,20 @@ def build_dag(dag_id: str, config_path: Path, s3_bucket: str, schedule_interval)
                     network_configuration=NETWORK_CONFIGURATION,
                     aws_conn_id="aws_default",
                     region_name=config.get("region", "us-east-1"),
+                    # Deferrable mode is switched on per-environment via
+                    # AIRFLOW__OPERATORS__DEFAULT_DEFERRABLE (the operator reads
+                    # it as its `deferrable` default), so this DAG file still
+                    # works unchanged in an environment with no triggerer.
+                    #
+                    # These two are tuned here because the defaults suit neither
+                    # case: waiter_delay=6 would have all ~56 deferred tasks
+                    # polling DescribeTasks ten times a minute each, and
+                    # waiter_max_attempts=1000000 makes the defer timeout
+                    # (max_attempts * delay + 60) effectively infinite. 30s x 200
+                    # gives a 100-minute ceiling, which clears the longest
+                    # observed task (run_deputados_despesas, 44min) with room.
+                    waiter_delay=30,
+                    waiter_max_attempts=200,
                 )
 
                 # Local pool registration
