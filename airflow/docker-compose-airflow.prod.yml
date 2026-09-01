@@ -57,8 +57,13 @@ x-airflow-common:
   environment:
     &airflow-common-env
     AIRFLOW__CORE__EXECUTOR: LocalExecutor
-    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres-airflow:5432/airflow
-    AIRFLOW__CORE__FERNET_KEY: ''
+    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:${POSTGRES_PASSWORD}@postgres-airflow:5432/airflow
+    # Vazio significa "nao criptografe": qualquer senha de connection gravada
+    # no metadata DB fica em claro. Hoje nao ha connection armazenada (o
+    # aws_conn_id cai no boto3/IMDS), entao definir a chave agora e barato —
+    # depois de existir connection criptografada, trocar a chave torna as
+    # existentes ilegiveis. Vem de airflow/.env no host, fora do git.
+    AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW_FERNET_KEY:?defina AIRFLOW_FERNET_KEY em airflow/.env - veja o runbook}
     AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: 'true'
     AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
     AIRFLOW__API__AUTH_BACKENDS: 'airflow.api.auth.backend.basic_auth,airflow.api.auth.backend.session'
@@ -125,7 +130,7 @@ services:
     mem_limit: 320m
     environment:
       POSTGRES_USER: airflow
-      POSTGRES_PASSWORD: airflow
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD em airflow/.env - veja o runbook}
       POSTGRES_DB: airflow
     volumes:
       - postgres_airflow_data:/var/lib/postgresql/data
@@ -185,8 +190,11 @@ services:
       <<: *airflow-common-env
       _AIRFLOW_DB_UPGRADE: 'true'
       _AIRFLOW_WWW_USER_CREATE: 'true'
-      _AIRFLOW_WWW_USER_USERNAME: airflow
-      _AIRFLOW_WWW_USER_PASSWORD: airflow
+      _AIRFLOW_WWW_USER_USERNAME: ${AIRFLOW_ADMIN_USER:-airflow}
+      # Era airflow/airflow, igual ao stack de dev e commitado no repo. A UI so
+      # e alcancavel por port-forward do SSM, entao nao era exploravel de fora,
+      # mas uma senha em arquivo versionado nao deve existir de qualquer forma.
+      _AIRFLOW_WWW_USER_PASSWORD: ${AIRFLOW_ADMIN_PASSWORD:?defina AIRFLOW_ADMIN_PASSWORD em airflow/.env - veja o runbook}
     user: "0:0"
     volumes:
       - ./dags:/opt/airflow/dags

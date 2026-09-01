@@ -12,6 +12,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 import asyncio
+import os
 import inspect
 import json
 
@@ -44,15 +45,30 @@ DEPENDENCIES = {
 }
 
 
+# Timeouts dimensionados pelas duracoes reais da run de producao
+# scheduled__2026-08-23 (medidas no metadata DB do Airflow), nao por estimativa.
+# codigo_situacao ficou perto do limite anterior (575s de 600s).
+#
+# Ate agora estes numeros eram ficcao: o parse do CSV rodava em asyncio.to_thread,
+# que asyncio.wait_for nao consegue cancelar, entao a task ultrapassava o proprio
+# timeout em silencio. Com o parse cancelavel (BulkParseTimeout), o limite passou
+# a valer de verdade — e precisa refletir quanto o trabalho realmente leva, senao
+# extractors que hoje terminam passariam a falhar.
+_TIMEOUT_OVERRIDES = {'codigo_situacao': 1200}
+_DEFAULT_TIMEOUT = 600
+
+
 def handler(event: dict, context=None):
-    """Main handler with timeout protection (10 min max per extraction)."""
+    """Main handler with per-extractor timeout protection."""
+    timeout = _TIMEOUT_OVERRIDES.get(event.get("extractor"), _DEFAULT_TIMEOUT)
+    # O parse do bulk aborta sozinho um pouco antes do limite duro, deixando
+    # margem para escrever a saida em vez de morrer com tudo perdido.
+    os.environ.setdefault("CAMARA_TASK_BUDGET_S", str(max(60, timeout - 120)))
     try:
-        return asyncio.run(
-            asyncio.wait_for(_run(event), timeout=600)  # 10 minutes = 600s
-        )
+        return asyncio.run(asyncio.wait_for(_run(event), timeout=timeout))
     except asyncio.TimeoutError:
-        print("[ERROR] Extraction timeout exceeded 10 minutes. Failing for Airflow retry.")
-        raise TimeoutError("Extraction timeout exceeded 10 minutes") from None
+        print(f"[ERROR] Extraction timeout exceeded {timeout}s. Failing for Airflow retry.")
+        raise TimeoutError(f"Extraction timeout exceeded {timeout} seconds") from None
 
 
 async def _run(event: dict):
@@ -120,7 +136,6 @@ async def _run(event: dict):
 
 if __name__ == "__main__":
     import sys
-    import os
     import json
 
     event_env = os.getenv("EVENT_PAYLOAD")
