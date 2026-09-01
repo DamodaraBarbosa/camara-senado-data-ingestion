@@ -283,6 +283,22 @@ If, after this tuning, `load average` (via `uptime`) still stays consistently hi
 5. Merge a trivial DAG change into `main`, wait for the next cron cycle (≤15 min), and confirm the UI reflects it without any manual restart.
 6. Stop the local docker-compose Airflow stack on your own machine and confirm the following Sunday's scheduled run fires from this EC2 instance instead (check Airflow's UI run history or `airflow/logs/dag_id=camara_ingestion_pipeline_prod/run_id=scheduled__.../` on the instance).
 
+## 8b. Known-good baseline
+
+Numbers from the first full production run this host ever completed successfully (2026-09-01), for comparison when something looks wrong later:
+
+| | |
+|---|---|
+| DAG run | 56/56 success, **42 minutes** |
+| Concurrent `deferred` tasks | 10 at peak, with `PARALLELISM: 2` |
+| Resident | scheduler 270MB, triggerer 218MB, postgres 31MB |
+| Peak swap | 807MB of 2048MB |
+| Minimum free RAM | 31MB |
+| `oom-kill` count | 0 |
+| S3 output | 56 objects, 1.48GB |
+
+A run that takes much longer than ~45 minutes, or any non-zero `oom-kill` count in `journalctl -k`, means something regressed. Note the minimum free RAM: this host runs with essentially no spare memory and depends on swap by design, so `free -m` showing little available is normal here, not a symptom.
+
 ## 9. Applying changes to an instance that is already running
 
 Steps 1-8 provision a new host. This section is the update path, which the rest of the runbook did not cover, and the gap was not theoretical.
