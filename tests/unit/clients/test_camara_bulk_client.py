@@ -12,10 +12,12 @@ import pytest
 
 from clients.camara_bulk_client import (
     DATASETS,
+    BulkParseTimeout,
     BulkSchemaChanged,
     CamaraBulkClient,
     _content_range_total,
 )
+from utils.budget import Deadline, reset_task_deadline, task_budget_s
 
 FIXTURES = Path(__file__).resolve().parents[2] / "fixtures" / "bulk"
 
@@ -101,3 +103,53 @@ def test_dataset_url_construction():
 def test_partitioned_dataset_requires_partition():
     with pytest.raises(ValueError, match="partition"):
         DATASETS["votacoes"].url()
+
+
+# --------------------------------------------------------------- cancelamento
+
+@pytest.mark.asyncio
+async def test_parse_aborts_when_budget_expires(bulk_client, monkeypatch):
+    """O parse precisa abortar sozinho — wait_for não cancela a thread.
+
+    Este é o caso que rodou em produção sem ninguém perceber: cinco extractors
+    terminando entre 911s e 2342s sob um wait_for de 600s, porque
+    asyncio.to_thread ignora o cancelamento do await.
+    """
+    monkeypatch.setattr("clients.camara_bulk_client._DEADLINE_CHECK_EVERY", 1)
+    expirado = Deadline(budget_s=0)
+
+    with pytest.raises(BulkParseTimeout) as exc:
+        await bulk_client.read_rows("votacoesOrientacoes", 2025, deadline=expirado)
+
+    assert "abortado" in str(exc.value)
+
+
+@pytest.mark.asyncio
+async def test_parse_completes_when_budget_is_ample(bulk_client, monkeypatch):
+    """Com orçamento sobrando o parse não muda em nada."""
+    monkeypatch.setattr("clients.camara_bulk_client._DEADLINE_CHECK_EVERY", 1)
+    rows = await bulk_client.read_rows(
+        "votacoesOrientacoes", 2025, deadline=Deadline(budget_s=3600)
+    )
+    assert len(rows) == 3
+
+
+@pytest.mark.asyncio
+async def test_read_rows_uses_process_deadline_by_default(bulk_client, monkeypatch):
+    """Sem deadline explícito o default vale — senão a correção não protegeria
+    nenhum dos 11 pontos de chamada existentes."""
+    monkeypatch.setattr("clients.camara_bulk_client._DEADLINE_CHECK_EVERY", 1)
+    monkeypatch.setenv("CAMARA_TASK_BUDGET_S", "0")
+    reset_task_deadline()
+    try:
+        with pytest.raises(BulkParseTimeout):
+            await bulk_client.read_rows("votacoesOrientacoes", 2025)
+    finally:
+        reset_task_deadline()
+
+
+def test_task_budget_reads_env_at_call_time(monkeypatch):
+    """O runner define CAMARA_TASK_BUDGET_S depois do import, então ler a
+    constante fixada no import abortaria um extractor de 3600s aos 480s."""
+    monkeypatch.setenv("CAMARA_TASK_BUDGET_S", "3480")
+    assert task_budget_s() == 3480

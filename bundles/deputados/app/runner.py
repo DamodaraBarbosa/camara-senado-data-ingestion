@@ -69,17 +69,21 @@ DEPENDENCIES = {
 # (CPU-bound, single-threaded) runs much slower on Fargate vCPU than on a dev
 # laptop, with considerable network variance (retries/resumes observed) —
 # even 1800s wasn't sufficient in real testing, so the wide margin.
-_TIMEOUT_OVERRIDES = {"despesas": 3600}
+# Medidos na run de producao scheduled__2026-08-23: despesas 2342s,
+# frentes 1017s. frentes vinha rodando sob um limite declarado de 600s e so
+# terminava porque o parse em asyncio.to_thread nao era cancelavel.
+_TIMEOUT_OVERRIDES = {"despesas": 3600, "frentes": 1800}
 _DEFAULT_TIMEOUT = 600
 
 
 def handler(event: dict, context=None):
     """Main handler with timeout protection (10 min max per extraction, configurable per extractor)."""
     timeout = _TIMEOUT_OVERRIDES.get(event.get("extractor"), _DEFAULT_TIMEOUT)
+    # O parse do bulk aborta sozinho um pouco antes do limite duro, deixando
+    # margem para escrever a saida em vez de morrer com tudo perdido.
+    os.environ.setdefault("CAMARA_TASK_BUDGET_S", str(max(60, timeout - 120)))
     try:
-        return asyncio.run(
-            asyncio.wait_for(_run(event), timeout=timeout)
-        )
+        return asyncio.run(asyncio.wait_for(_run(event), timeout=timeout))
     except asyncio.TimeoutError:
         print(f"[ERROR] Extraction timeout exceeded {timeout // 60} minutes. Failing for Airflow retry.")
         raise TimeoutError(f"Extraction timeout exceeded {timeout} seconds") from None
@@ -156,7 +160,6 @@ async def _run(event: dict):
 
 if __name__ == "__main__":
     import sys
-    import os
 
     event_env = os.getenv("EVENT_PAYLOAD")
     event = {}

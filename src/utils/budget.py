@@ -58,3 +58,36 @@ def clamp_batch_size(batch_size: int, total: int, min_checkpoints: int = MIN_CHE
         return max(1, batch_size)
     ceiling = -(-total // min_checkpoints)  # ceil division
     return max(1, min(batch_size, ceiling))
+
+
+def task_budget_s() -> float:
+    """Orçamento corrente, lido do ambiente a cada chamada.
+
+    Diferente da constante ``TASK_BUDGET_S`` (fixada no import), esta função
+    enxerga o valor que o runner define em ``CAMARA_TASK_BUDGET_S`` a partir do
+    seu próprio timeout. Sem isso, um extractor com override de 3600s ainda
+    seria abortado no orçamento default de 480s.
+    """
+    return float(os.getenv("CAMARA_TASK_BUDGET_S", TASK_BUDGET_S))
+
+
+_task_deadline = None
+
+
+def task_deadline():
+    """Deadline única do processo, criada na primeira chamada.
+
+    Cada task ECS roda um extractor num processo próprio, então um deadline por
+    processo é exatamente o escopo certo: mede desde o primeiro uso até o
+    limite do runner, atravessando downloads e parses.
+    """
+    global _task_deadline
+    if _task_deadline is None:
+        _task_deadline = Deadline(task_budget_s())
+    return _task_deadline
+
+
+def reset_task_deadline():
+    """Zera o deadline do processo. Existe para os testes."""
+    global _task_deadline
+    _task_deadline = None
