@@ -273,6 +273,61 @@ docker compose -f docker-compose-airflow.prod.yml --profile ui stop webserver
 
 If, after this tuning, `load average` (via `uptime`) still stays consistently high even with the webserver stopped, the next step would be resizing to `t3.small` — not attempted here since tuning alone resolved it.
 
+## 7b. Secrets file (`airflow/.env`)
+
+`docker-compose-airflow.prod.yml` no longer carries credentials. It reads three values from `airflow/.env` on the host, and **fails loudly if they are missing** rather than falling back to a weak default — a silent fallback is how `airflow`/`airflow` ended up committed in the first place. That file is gitignored and never leaves the instance.
+
+Create it once, on the instance:
+
+```bash
+cd /opt/camara-senado-data-ingestion/airflow
+
+# grep + tail: this image prints a blank line before the key, which without
+# filtering leaves AIRFLOW_FERNET_KEY empty and the key stranded on its own
+# line — a broken .env that still looks plausible at a glance.
+FERNET=$(sudo docker run --rm 904464083417.dkr.ecr.us-east-1.amazonaws.com/camara-airflow:latest \
+  python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())" \
+  | tr -d '\r' | grep -E '^[A-Za-z0-9_-]{43}=$' | tail -1)
+[ -n "$FERNET" ] || echo "FALHOU: fernet key vazia, nao escreva o arquivo"
+
+sudo umask 077 && printf 'AIRFLOW_FERNET_KEY=%s\nAIRFLOW_ADMIN_USER=airflow\nAIRFLOW_ADMIN_PASSWORD=%s\nPOSTGRES_PASSWORD=airflow\n' \
+  "$FERNET" "$(openssl rand -base64 24 | tr -d '\n')" | sudo tee .env >/dev/null
+sudo chmod 600 .env
+```
+
+Check it before moving on — a malformed `.env` fails at `up -d`, not here:
+
+```bash
+wc -l < .env                                             # 4
+sed 's/=.*/=<set>/' .env                                 # 4 keys, no stray lines
+docker compose -f docker-compose-airflow.prod.yml config >/dev/null && echo OK
+```
+
+Do not echo the generated values into a terminal you do not control; the point of the file is that they exist in exactly one place.
+
+Three things about that snippet:
+
+**The Fernet key encrypts connection passwords in the metadata DB.** It was empty, which means "store them in the clear". There are currently no stored connections (`aws_conn_id` falls back to boto3/IMDS), so setting it now costs nothing. Once encrypted connections exist, changing this key makes them unreadable — so set it before creating any connection, not after.
+
+**`POSTGRES_PASSWORD` is deliberately left as `airflow` above.** This is the trap: postgres only reads `POSTGRES_PASSWORD` when it *initialises* a fresh data directory. On an existing host the volume already exists, so putting a new value here does not change the database password — it only changes what Airflow tries to connect with, and the stack breaks. To actually rotate it, change the password inside the database first, then update the file:
+
+```bash
+NEW=$(openssl rand -base64 24)
+docker exec airflow-postgres-airflow-1 psql -U airflow -d airflow \
+  -c "ALTER USER airflow WITH PASSWORD '$NEW';"
+sudo sed -i "s|^POSTGRES_PASSWORD=.*|POSTGRES_PASSWORD=$NEW|" .env
+docker compose -f docker-compose-airflow.prod.yml up -d
+```
+
+Postgres publishes no port (no `ports:` on that service), so it is reachable only from inside the compose network — which is why leaving it for later is defensible, and why the fix here is the file, not the value.
+
+**The admin password change takes effect on the next `airflow-init` run**, which happens on every `up -d`. The existing `airflow` user is not modified by a changed `_AIRFLOW_WWW_USER_PASSWORD`; reset it explicitly if you need to:
+
+```bash
+docker compose -f docker-compose-airflow.prod.yml exec scheduler \
+  airflow users reset-password --username airflow
+```
+
 ## 8. Validate
 
 1. `docker compose -f docker-compose-airflow.prod.yml ps` shows `postgres-airflow`, `scheduler` and `triggerer` healthy by default (no `webserver` — see step 7), with stable (not repeatedly resetting) uptimes. `uptime` shows a `load average` well under 2.0 (2 vCPUs) a few minutes after startup. `free -m` shows the 2GB swapfile present and the three containers sitting around 620-690MB total in `docker stats`.
