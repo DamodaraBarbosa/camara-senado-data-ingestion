@@ -415,4 +415,5 @@ export CAMARA_CACHE_DIR=/tmp/camara-cache
 | Tasks stuck in `deferred` forever | The `triggerer` service is not running. It is mandatory whenever `AIRFLOW__OPERATORS__DEFAULT_DEFERRABLE` is `true`. |
 | Deferred task fails immediately on an `aiobotocore` import | The image was built without the `[aiobotocore]` extra. Rebuild `airflow/Dockerfile` and redeploy (runbook step 9). |
 | Tasks stay `running` for the whole Fargate duration | `AIRFLOW__OPERATORS__DEFAULT_DEFERRABLE` did not take effect — check it is set in the compose env the container actually got. |
+| A setting changed in `docker-compose-airflow.prod.yml` has no effect on prod | The DAG-sync cron only does `git pull`; containers keep the config they were created with. Recreate them (runbook step 9). This silently defeated the `PARALLELISM` cap for 10 days. |
 | `airflow version` prints 3.x after an image rebuild | The pin/constraints in `airflow/Dockerfile` were bypassed. Installing the amazon provider unpinned upgrades Airflow across a major version and still exits 0. |
