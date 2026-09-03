@@ -80,6 +80,17 @@ jobs:
         uses: dorny/paths-filter@v3
         id: filter
         with:
+          # Sem `base`, a action compara contra o branch default do repositorio,
+          # que aqui e `develop`. Num push para `main` isso vira
+          # merge-base(develop, main), que e o proprio HEAD porque `main` e
+          # sempre fast-forward de `develop` — ou seja "Detected 0 changed
+          # files" em toda release, `deploy = false`, build e push pulados, e o
+          # job terminando VERDE. A imagem `camara-ingestion:prod` ficou
+          # congelada em f30b4398 (2026-07-31) por um mes enquanto `main`
+          # avancava 30 commits, sem nenhum sinal de falha.
+          # `github.event.before` e o SHA anterior do proprio branch, que e a
+          # base que este filtro sempre quis. Requer o `fetch-depth: 0` acima.
+          base: ${{ github.event.before }}
           filters: |
             deploy:
               - 'bundles/**'
@@ -133,6 +144,17 @@ jobs:
         uses: dorny/paths-filter@v3
         id: filter
         with:
+          # Sem `base`, a action compara contra o branch default do repositorio,
+          # que aqui e `develop`. Num push para `main` isso vira
+          # merge-base(develop, main), que e o proprio HEAD porque `main` e
+          # sempre fast-forward de `develop` — ou seja "Detected 0 changed
+          # files" em toda release, `deploy = false`, build e push pulados, e o
+          # job terminando VERDE. A imagem `camara-ingestion:prod` ficou
+          # congelada em f30b4398 (2026-07-31) por um mes enquanto `main`
+          # avancava 30 commits, sem nenhum sinal de falha.
+          # `github.event.before` e o SHA anterior do proprio branch, que e a
+          # base que este filtro sempre quis. Requer o `fetch-depth: 0` acima.
+          base: ${{ github.event.before }}
           filters: |
             deploy:
               - 'bundles/**'
