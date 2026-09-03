@@ -1,10 +1,63 @@
 from datetime import datetime, timedelta
 import json
+import os
+import traceback
 from pathlib import Path
 from airflow import DAG
 from airflow.providers.amazon.aws.operators.ecs import EcsRunTaskOperator
 
 CONFIG_DIR = Path(__file__).resolve().parent / "config"
+
+# ARN do topico SNS de alertas (criado em camara-senado-data-infra,
+# environments/prod/main.tf). Ausente = callback vira no-op, que e exatamente
+# o que se quer no stack local de dev: nada de alerta, nada de excecao.
+ALERT_SNS_TOPIC_ARN = os.getenv("CAMARA_ALERT_SNS_TOPIC_ARN", "")
+
+
+def notify_failure(context) -> None:
+    """Publica uma falha no SNS.
+
+    Existe porque ate agora uma falha em producao era completamente silenciosa:
+    ``email_on_failure`` esta desligado, nao ha SMTP configurado, nao havia
+    topico SNS e nao ha alarme no CloudWatch. Com cadencia semanal, uma falha
+    que ninguem ve custa uma semana inteira de dados.
+
+    Nunca levanta excecao: um callback que falha polui o log do scheduler e nao
+    conserta nada. O pior caso aceitavel e o alerta se perder — nao a task
+    trocar sua causa de falha real por um erro de boto3.
+    """
+    if not ALERT_SNS_TOPIC_ARN:
+        return
+
+    try:
+        import boto3
+
+        ti = context.get("task_instance")
+        dag_run = context.get("dag_run")
+        dag_id = getattr(ti, "dag_id", "?")
+        task_id = getattr(ti, "task_id", "<dag-run>")
+        run_id = getattr(dag_run, "run_id", "?")
+        exception = context.get("exception")
+
+        subject = f"[Airflow][FALHA] {dag_id}.{task_id}"[:100]
+        body = "\n".join([
+            f"DAG:        {dag_id}",
+            f"Task:       {task_id}",
+            f"Run:        {run_id}",
+            f"Tentativa:  {getattr(ti, 'try_number', '?')}",
+            f"Log:        {getattr(ti, 'log_url', 'n/a')}",
+            "",
+            f"Excecao:    {exception!r}",
+            "",
+            "Logs do container em /ecs/dataplatform-ingestion-task-prod (CloudWatch).",
+        ])
+
+        boto3.client("sns").publish(
+            TopicArn=ALERT_SNS_TOPIC_ARN, Subject=subject, Message=body
+        )
+    except Exception:  # noqa: BLE001
+        print(f"[alert] falha ao publicar no SNS (ignorado):\n{traceback.format_exc()}")
+
 
 # Task default arguments
 DEFAULT_ARGS = {
@@ -23,6 +76,9 @@ DEFAULT_ARGS = {
     # So this is the only ceiling that actually holds. Sized above the
     # waiter ceiling below so the waiter reports the timeout first.
     "execution_timeout": timedelta(minutes=110),
+    # Sinal imediato, nomeando a task que quebrou. Dispara so na tentativa
+    # final (depois de `retries`), entao um 429 transitorio nao vira e-mail.
+    "on_failure_callback": notify_failure,
 }
 
 # Rede compartilhada entre dev e prod: mesma VPC/subnets/security group até
@@ -62,6 +118,10 @@ def build_dag(dag_id: str, config_path: Path, s3_bucket: str, schedule_interval)
         catchup=False,
         max_active_runs=1,
         tags=["camara", "data_ingestion", "fargate"],
+        # Complementa o callback por task: cobre a dagrun que termina falhada
+        # sem nenhuma task ter falhado por si (upstream_failed, deadlock de
+        # dependencia), caso em que o callback de task nunca dispararia.
+        on_failure_callback=notify_failure,
     )
 
     with dag:

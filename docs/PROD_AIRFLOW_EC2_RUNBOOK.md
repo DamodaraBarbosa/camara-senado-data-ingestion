@@ -86,8 +86,15 @@ cat > /tmp/airflow-ec2-ecs-policy.json <<'EOF'
       "Action": "iam:PassRole",
       "Resource": [
         "arn:aws:iam::904464083417:role/dataplatform_ecs_task_execution_role_dev",
-        "arn:aws:iam::904464083417:role/dataplatform_airflow"
+        "arn:aws:iam::904464083417:role/dataplatform_ecs_task_execution_role_prod",
+        "arn:aws:iam::904464083417:role/dataplatform_airflow_dev",
+        "arn:aws:iam::904464083417:role/dataplatform_airflow_prod"
       ]
+    },
+    {
+      "Effect": "Allow",
+      "Action": "sns:Publish",
+      "Resource": "arn:aws:sns:us-east-1:904464083417:dataplatform-alerts-*"
     },
     {
       "Effect": "Allow",
@@ -109,7 +116,9 @@ aws iam put-role-policy \
   --policy-document file:///tmp/airflow-ec2-ecs-policy.json
 ```
 
-> If/when isolated prod IAM roles (`dataplatform_ecs_task_execution_role_prod`, `dataplatform_airflow_prod`) are created per `docs/PROD_DEPLOY_RUNBOOK.md:121`, add their ARNs to the `iam:PassRole` resource list above.
+> The four `iam:PassRole` ARNs above are what the account actually has today (audited 2026-09-02). This document previously listed only the dev pair, which had been out of date since the isolated prod roles were created — the prod DAG has been passing `dataplatform_ecs_task_execution_role_prod` / `dataplatform_airflow_prod` since 2026-08-21.
+
+> `sns:Publish` is what the DAG's `on_failure_callback` needs (`airflow/dags/camera_ingestion_dag.py::notify_failure`). Without it a failing task still fails correctly, but the alert e-mail is silently dropped — the callback swallows its own errors on purpose, so the only symptom is a `[alert]` line in the scheduler log. The topic itself is created by Terraform in `camara-senado-data-infra` (`environments/prod/main.tf`).
 
 Create the instance profile and attach the role:
 

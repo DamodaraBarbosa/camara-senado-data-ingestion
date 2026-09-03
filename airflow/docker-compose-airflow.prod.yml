@@ -68,6 +68,16 @@ x-airflow-common:
     AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
     AIRFLOW__API__AUTH_BACKENDS: 'airflow.api.auth.backend.basic_auth,airflow.api.auth.backend.session'
     AWS_DEFAULT_REGION: us-east-1
+    # Topico SNS de alerta de falha, lido pelo on_failure_callback da DAG
+    # (airflow/dags/camera_ingestion_dag.py). Criado em
+    # camara-senado-data-infra, environments/prod/main.tf. Vazio = callback
+    # vira no-op, que e o comportamento do stack local de dev.
+    #
+    # Atencao: mudar esta variavel NAO tem efeito nos containers ja criados —
+    # o cron de sync so faz `git pull`. E preciso recriar
+    # (`docker compose -f docker-compose-airflow.prod.yml up -d --force-recreate`),
+    # o mesmo detalhe que anulou o cap de PARALLELISM por 10 dias.
+    CAMARA_ALERT_SNS_TOPIC_ARN: ${CAMARA_ALERT_SNS_TOPIC_ARN:-arn:aws:sns:us-east-1:904464083417:dataplatform-alerts-prod}
     # Only one weekly-scheduled DAG, no need to near-real-time reparse it.
     AIRFLOW__SCHEDULER__MIN_FILE_PROCESS_INTERVAL: '300'
     AIRFLOW__SCHEDULER__PARSING_PROCESSES: '1'
