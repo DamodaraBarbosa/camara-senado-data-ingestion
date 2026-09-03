@@ -12,6 +12,13 @@ a conta `904464083417` (us-east-1), os dois repositórios e os últimos 10 merge
 para consulta posterior. O recorte de infraestrutura está em
 `camara-senado-data-infra/AUDITORIA_PRODUCAO_2026-09-02.md`.
 
+> **Status em 2026-09-03 03:30 UTC — Sprint 0 concluída e verificada na AWS.** Os sete
+> itens entraram em produção. O que muda daqui para frente: a imagem de produção deixou de
+> estar congelada, uma falha passa a gerar e-mail, e uma sobrescrita acidental no S3 passa a
+> ser recuperável. O primeiro teste real é a run de **domingo 2026-09-06 06:00 UTC** — o
+> primeiro disparo autônomo que o host de produção executa de ponta a ponta. Os detalhes
+> verificados estão em cada achado abaixo e no checklist da Sprint 0.
+
 ---
 
 ## O que já estava certo
@@ -57,7 +64,32 @@ Impacto: `7d57b10 fix: make the bulk CSV parse cancellable, and the timeouts hon
 estava em `main` e **não rodava em produção**. Toda run semanal executava código de julho.
 
 **Correção aplicada:** `base: ${{ github.event.before }}` nos dois jobs de deploy em
-`.github/workflows/ci.yml`.
+`.github/workflows/ci.yml` (PR #62 → #63, `main` em `843aabb`).
+
+**Verificado.** O log do job "Deploy (production)" no push do merge em `main`
+(run `33709736625`) mostra o comportamento novo:
+
+```
+Changes will be detected between d100aaaef189d2ad6c24e32b2981c53dba851834 and main
+Detected 5 changed files
+Filter deploy = false
+```
+
+Compare com o antigo — `between develop and main`, `Detected 0 changed files`. Agora ele
+compara contra o SHA anterior de `main` e enxerga os arquivos de verdade; `deploy = false`
+aqui é a decisão **correta**, porque nenhum dos 5 (`ci.yml`, a DAG, o compose, o runbook e
+este `.md`) casa com `bundles/**`, `src/**`, `Dockerfile` ou `requirements.txt`.
+
+**Imagem republicada** via `workflow_dispatch` (run `33711264029`, todos os jobs verdes,
+Deploy (production) construindo e empurrando de fato):
+
+```
+prod, prod-843aabbc   sha256:0cf17c31bd08...   70 MB   2026-09-03 03:25:40 UTC
+```
+
+O sufixo bate com o `main` HEAD (`843aabbc31d9c55233c6feb8dc66c9ec7065e7e7`) e as duas tags
+apontam para o mesmo digest. A task definition referencia a tag mutável `:prod`, então a
+próxima task Fargate já sobe com esta imagem — **`7d57b10` finalmente roda em produção**.
 
 ### P0-2 — Um rerun sobrescreve dado bom com vazio, e reporta sucesso  ⚠️ PARCIAL
 
@@ -88,8 +120,13 @@ Três defeitos somados:
    0 registros é indistinguível de sucesso.
 3. O bucket **não tinha versionamento** — o dado sobrescrito era irrecuperável.
 
-**Feito na Sprint 0:** versionamento ligado no bucket (rede de segurança).
-**Pendente (Sprint 1):** escrita idempotente e contagem-zero-vira-falha. Ver backlog.
+**Feito na Sprint 0:** versionamento ligado (rede de segurança). Confirmado na AWS —
+`get-bucket-versioning` retorna `Enabled` em `dataplatform-camara-prod-db` e
+`dataplatform-senado-prod-db`. A partir de agora, uma sobrescrita como a de 08-23 deixa a
+versão boa recuperável via `list-object-versions` em vez de destruí-la.
+
+**Pendente (Sprint 1):** escrita idempotente e contagem-zero-vira-falha — a **causa**
+continua intacta. Ver backlog.
 
 ### P0-3 — Zero alertas  ✅ CORRIGIDO (Sprint 0)
 
@@ -102,9 +139,20 @@ Três defeitos somados:
 
 Com cadência semanal, uma falha silenciosa custa uma semana inteira de dados.
 
-**Correção aplicada:** tópico SNS + assinatura de e-mail (Terraform), `on_failure_callback`
-publicando no SNS por task e por dagrun, retenção do log group para 30 dias,
-`sns:Publish` na policy do role da instância.
+**Correção aplicada e verificada ponta a ponta:**
+
+| elo | estado |
+|---|---|
+| tópico | `arn:aws:sns:us-east-1:904464083417:dataplatform-alerts-prod` criado |
+| assinatura | confirmada (`SubscriptionArn` = `...:6de0ee52-...`, não mais `PendingConfirmation`) |
+| permissão | `sns:Publish` na policy inline `dataplatform-airflow-ec2-ecs` |
+| callback | `notify_failure` por task e por dagrun |
+| variável no container | `CAMARA_ALERT_SNS_TOPIC_ARN` presente no `airflow-scheduler-1` |
+| retenção do log group | `7` → `30` dias |
+
+O e-mail de confirmação da AWS caiu no **spam** — vale marcar `no-reply@sns.amazonaws.com`
+como remetente confiável. Um alerta que vai para o spam é funcionalmente idêntico a não ter
+alerta nenhum, que é exatamente o problema que este item veio resolver.
 
 > **Correção a um erro do primeiro diagnóstico.** Eu havia reportado que a run de
 > `2026-08-30` "nunca aconteceu e foi perdida para sempre". **Isso estava errado.** O
@@ -130,6 +178,11 @@ publicando no SNS por task e por dagrun, retenção do log group para 30 dias,
   exatamente as duas que a derrubaram (5 OOM-kills entre 30 e 31/08, host inacessível
   por 4 dias).
 - Sem alarme de auto-recovery do EC2.
+
+**Status:** continua **pendente** — nada deste achado foi resolvido na Sprint 0, exceto a
+verificação do landmine abaixo. A instância segue fora do IaC, sem snapshot do metadata DB,
+sem métrica de memória e sem auto-recovery. É o item de maior risco em aberto: se o host
+morrer numa sexta, a run de domingo não acontece e a recuperação é manual.
 
 **Landmine que estava ativo e foi verificado:** `9437f56` passou a exigir
 `AIRFLOW_FERNET_KEY`, `AIRFLOW_ADMIN_PASSWORD` e `POSTGRES_PASSWORD` com sintaxe
@@ -203,15 +256,34 @@ antes, menos histórico para reprocessar. Só depois D-2 e D-4.
 
 ## Backlog
 
-### Sprint 0 — executado em 2026-09-03
+### Sprint 0 — concluída em 2026-09-03
 
-- [x] Diagnóstico read-only do host via SSM (`.env`, containers, DAG, memória)
-- [x] `base:` no `dorny/paths-filter` dos dois jobs de deploy (`.github/workflows/ci.yml`)
+Todos os itens verificados contra a AWS, não apenas mergeados.
+
+- [x] Diagnóstico read-only do host via SSM — `.env` presente e válido, três containers up,
+      DAG despausada, sem erro de import. O landmine do `.env` não existia.
+- [x] `base:` no `dorny/paths-filter` dos dois jobs de deploy — comprovado no log do CI
 - [x] `on_failure_callback` → SNS na DAG, por task e por dagrun
-- [x] `CAMARA_ALERT_SNS_TOPIC_ARN` no compose de produção
-- [x] Tópico SNS + assinatura de e-mail, versionamento do bucket, retenção 30 dias (infra)
+- [x] `CAMARA_ALERT_SNS_TOPIC_ARN` no compose **e no container** — o scheduler e o triggerer
+      foram recriados via SSM (`up -d --force-recreate scheduler triggerer`), preservando o
+      `postgres-airflow`, que é o container cujo volume guarda o metadata DB sem snapshot.
+      Sem esse recreate a variável ficaria só no arquivo: o cron de sync só faz `git pull`.
+- [x] Tópico SNS + assinatura **confirmada**, versionamento `Enabled` nos dois buckets prod,
+      retenção 30 dias — `Plan: 4 to add, 1 to change, 0 to destroy`
 - [x] `sns:Publish` na policy inline do role da instância + runbook corrigido
-- [x] Republicação de `camara-ingestion:prod` a partir de `main`
+- [x] Republicação de `camara-ingestion:prod` → `prod-843aabbc`, digest `sha256:0cf17c31...`
+
+**Merges:** ingestão `843aabb` (PRs #62, #63), infra `6e8fd47` (PRs #28, #29). Zero drift
+entre `develop` e `main` nos dois repositórios.
+
+**O que observar na segunda-feira 2026-09-07**, depois da primeira run autônoma:
+
+1. Os 56 objetos com `run_id` `scheduled__2026-08-30` apareceram em
+   `s3://dataplatform-camara-prod-db/raw/`?
+2. Algum veio com 2 bytes? Se sim, é a confirmação de que P0-2 continua mordendo — com a
+   diferença de que agora `list-object-versions` permite recuperar a versão boa.
+3. Chegou algum e-mail do `dataplatform-alerts-prod`? Se a run falhou e **não** chegou
+   e-mail, o problema é o canal, não o pipeline.
 
 ### Sprint 1 — confiabilidade da carga
 
