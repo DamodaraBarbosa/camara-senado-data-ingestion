@@ -122,7 +122,15 @@ if param_name not in resolved_params:
 
 **Writing** (`task_io.py::write_output()`):
 - Accepts: list of dicts, sync generator, or async generator.
-- Always writes canonical path: `{cache_dir}/{bundle}/{name}_{run_id}.json`.
+- Always writes canonical path: `{cache_dir}/{bundle}/{name}_{run_id}.json` (local cache,
+  unpartitioned — it is ephemeral scratch inside the container, already isolated by run_id).
+- **Format is NDJSON**: one complete JSON object per line, no enclosing array. The Glue/Athena
+  JSON SerDe requires exactly this; the previous pretty-printed array made every table over
+  `raw/` impossible.
+- **Refuses to publish an empty extraction.** Zero records raises `EmptyExtractionError` unless
+  the `(bundle, extractor)` pair is in `_ALLOW_EMPTY`, and even then it never overwrites a
+  non-empty object. This is the fix for `scheduled__2026-08-23`, where a retry wrote `[]` over
+  42,050 records and all 56 tasks still reported `success`.
 - Optional explicit path: `destination["path"]` (for custom output location).
 - **S3 write**: multipart upload, buffered (8 MB chunks), streams records row-by-row → no materialization of full JSON in memory.
 - Returns: count of records written.
@@ -390,7 +398,12 @@ export CAMARA_CACHE_DIR=/tmp/camara-cache
 - **Airflow UI (prod)**: the scheduler and triggerer run 24/7 on a dedicated EC2 instance (see `docs/PROD_AIRFLOW_EC2_RUNBOOK.md`) so the weekly schedule never depends on a local machine, but the webserver itself only runs on demand (`docker compose --profile ui up -d webserver`, reachable only via SSM Session Manager port-forwarding, no public inbound port) — running it 24/7 alongside the scheduler pegged this small instance's CPU.
 - **Task logs**: `airflow/logs/dag_id=.../run_id=.../task_id=...` (dev: local filesystem; prod: on the EC2 instance's own volume).
 - **CloudWatch**: `/ecs/dataplatform-ingestion-task-{dev,prod}` (prod/fargate).
-- **S3 output**: `s3://dataplatform-camara-{dev,prod}-db/raw/{bundle}/{extractor}/` — files named `{extractor}_{run_id}.json`.
+- **S3 output**: `s3://dataplatform-camara-{dev,prod}-db/raw/{bundle}/{extractor}/ingestion_date=YYYY-MM-DD/{extractor}_{run_id}.json`
+  — Hive-partitioned. `ingestion_date` comes from the DAG as `{{ data_interval_end | ds }}` and is
+  resolved once per task by `task_io.resolve_ingestion_date()`, so the writer and every dependency
+  reader in the same dagrun agree on the partition. Each file is a **full snapshot**, not a delta:
+  every run re-extracts the whole window, so a dbt `incremental` model that merely appends
+  partitions would multiply rows.
 
 ## Known Limitations & Future Improvements
 

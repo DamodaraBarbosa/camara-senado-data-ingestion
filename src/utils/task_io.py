@@ -16,12 +16,22 @@ across ``bundles/*/app/runner.py``. Two divergences caused real bugs:
 Here the cache path is always canonical and derived from
 ``(bundle, nome, run_id)`` — never from ``destination["path"]``.
 
-S3 write via multipart upload: `_write_s3` now accepts async/sync generators
-and streams to S3 without materializing the entire JSON in memory.
+Output format is **NDJSON** (one complete JSON object per line, no enclosing
+array). The previous pretty-printed array was unreadable by the Glue/Athena JSON
+SerDe, which requires exactly one object per line — no table over ``raw/`` could
+work. S3 writes stream via multipart upload without materializing the whole
+payload in memory.
+
+S3 keys are **Hive-partitioned** by ``ingestion_date``. Before that, every weekly
+run landed in the same prefix with the date only in the *file name*, so a table
+over ``raw/votacoes/votacoes/`` would UNION every execution ever made, growing by
+one per week, with no way to read a single load incrementally.
 """
 import inspect
 import json
 import os
+import re
+from datetime import date
 from pathlib import Path
 
 _S3_UPLOAD_PART_BYTES = int(os.getenv("S3_UPLOAD_PART_BYTES", 8 << 20))  # 8 MB
@@ -32,24 +42,107 @@ STRICT_DEPENDENCY_CACHE = os.getenv("STRICT_DEPENDENCY_CACHE", "1") not in ("0",
 
 DEFAULT_CACHE_DIR = os.getenv("CAMARA_CACHE_DIR", "/tmp")
 
+# Extractors que podem legitimamente devolver zero registros. Todo o resto falha
+# alto quando a contagem e zero — ver `_guard_empty`.
+#
+# A lista comeca minima de proposito. Varrendo os objetos de ate 10 bytes em
+# s3://dataplatform-camara-prod-db/raw/, 16 objetos vazios apareceram em 10 pares
+# (bundle, extractor) distintos ao longo de 4 runs — e **todos os 10 produziram
+# dado em pelo menos uma run**. Ou seja, nenhum e confiavelmente vazio e o vazio
+# e intermitente. Estes dois entram porque vieram vazios em 3 das 4 runs, o que e
+# consistente com dependerem da janela temporal (uma pauta so existe para evento
+# futuro ja agendado), nao com o bug de sobrescrita.
+_ALLOW_EMPTY = {
+    ("eventos", "pauta"),
+    ("eventos", "votacoes"),
+}
+
+_ISO_DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
+
 
 class DependencyCacheMiss(RuntimeError):
     """Missing dependency from cache with STRICT_DEPENDENCY_CACHE enabled."""
 
 
+class EmptyExtractionError(RuntimeError):
+    """Extractor devolveu 0 registros onde isso nunca e um resultado valido.
+
+    Existe por causa da run `scheduled__2026-08-23`: quatro datasets terminaram
+    com 2 bytes (`[]`) e as 56 tasks reportaram `success`. `raw/votacoes/votacoes`
+    foi de 42.050 registros para vazio sem ninguem ver. Falhar aqui transforma
+    corrupcao silenciosa em alerta.
+    """
+
+
+def resolve_ingestion_date(event: dict) -> str:
+    """Data da particao Hive, resolvida uma vez por task a partir do evento.
+
+    Precedencia:
+
+    1. ``event["ingestion_date"]`` — o que a DAG injeta (`{{ data_interval_end | ds }}`),
+       identico nas 56 tasks da mesma dagrun.
+    2. a primeira data ISO dentro do ``run_id`` — cobre `scheduled__2026-08-23T06:00...`
+       e `manual__2026-08-21T02:12...` de forma deterministica, para imagens antigas
+       ou execucoes fora da DAG.
+    3. hoje — ultimo recurso para run local/ad hoc.
+
+    Nao derivar so de (3): leitor e escritor de uma dependencia rodam em tasks ECS
+    diferentes, e uma dagrun que atravessasse a meia-noite UTC resolveria datas
+    distintas e quebraria o cache.
+    """
+    explicit = (event or {}).get("ingestion_date")
+    if explicit:
+        return str(explicit)
+
+    match = _ISO_DATE.search(str((event or {}).get("run_id", "")))
+    if match:
+        return match.group(0)
+
+    return date.today().isoformat()
+
+
 def cache_path(bundle: str, name: str, run_id: str, cache_dir: str = None) -> Path:
-    """Canonical cache path. Always namespaced by run_id."""
+    """Canonical local cache path. Always namespaced by run_id.
+
+    Nao particionado: e scratch efemero dentro do container, ja isolado por
+    run_id. A particao so existe no S3, onde o Athena precisa dela.
+    """
     base = Path(cache_dir or DEFAULT_CACHE_DIR)
     return base / bundle / f"{name}_{run_id}.json"
 
 
-def s3_key(bundle: str, name: str, run_id: str) -> str:
-    """Canonical S3 key, mirroring the prefix the DAG builds."""
-    return f"raw/{bundle}/{name}/{name}_{run_id}.json"
+def s3_key(bundle: str, name: str, run_id: str, ingestion_date: str) -> str:
+    """Canonical S3 key, Hive-partitioned by ingestion_date.
+
+    Unico ponto de verdade da chave: `read_dependency` e `_write_s3` chamam esta
+    funcao, entao leitura e escrita nao tem como divergir.
+    """
+    return f"raw/{bundle}/{name}/ingestion_date={ingestion_date}/{name}_{run_id}.json"
 
 
-def read_dependency(destination: dict, bundle: str, name: str, run_id: str):
-    """Lê a saída de uma dependência do cache.
+def _parse_records(text: str, source: str) -> list:
+    """Le NDJSON, aceitando o array legado gravado antes desta mudanca."""
+    stripped = text.lstrip()
+    if stripped.startswith("["):
+        # Arquivo no formato antigo (array JSON). Nenhuma dagrun mistura os dois
+        # — todas as 56 tasks usam a mesma imagem — mas caches locais de dev
+        # sobrevivem a troca de branch.
+        return json.loads(stripped) if stripped.strip() != "[]" else []
+
+    records = []
+    for line_number, line in enumerate(text.splitlines(), start=1):
+        if not line.strip():
+            continue
+        try:
+            records.append(json.loads(line))
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"NDJSON invalido em {source}, linha {line_number}: {exc}") from exc
+    return records
+
+
+def read_dependency(destination: dict, bundle: str, name: str, run_id: str,
+                    ingestion_date: str = None):
+    """Le a saida de uma dependencia do cache.
 
     Returns:
         Os dados, ou ``None`` se ausente e ``STRICT_DEPENDENCY_CACHE`` desligado.
@@ -65,163 +158,198 @@ def read_dependency(destination: dict, bundle: str, name: str, run_id: str):
             import boto3
 
             bucket = destination.get("bucket")
-            key = s3_key(bundle, name, run_id)
+            key = s3_key(bundle, name, run_id, ingestion_date)
             body = boto3.client("s3").get_object(Bucket=bucket, Key=key)["Body"]
-            data = json.loads(body.read().decode("utf-8"))
+            data = _parse_records(body.read().decode("utf-8"), f"s3://{bucket}/{key}")
             print(f"[cache] '{name}' lido de s3://{bucket}/{key}: {len(data)} registros")
             return data
 
         path = cache_path(bundle, name, run_id, destination.get("cache_dir"))
         with open(path, "r", encoding="utf-8") as fh:
-            data = json.load(fh)
+            data = _parse_records(fh.read(), str(path))
         print(f"[cache] '{name}' lido de {path}: {len(data)} registros")
         return data
 
     except Exception as exc:  # noqa: BLE001
-        message = f"[cache] '{name}' indisponível no cache: {exc}"
+        message = f"[cache] '{name}' indisponivel no cache: {exc}"
         if STRICT_DEPENDENCY_CACHE:
             raise DependencyCacheMiss(message) from exc
         print(f"{message} — recomputando.")
         return None
 
 
-async def write_output(data, destination: dict, bundle: str, name: str, run_id: str) -> int:
-    """Grava a saída no cache canônico e, se pedido, no path explícito.
-
-    Grava sempre no caminho canônico (para os dependentes encontrarem) e
-    adicionalmente em ``destination["path"]`` quando o operador especificar um
-    — sem que isso contamine a chave de cache.
+async def write_output(data, destination: dict, bundle: str, name: str, run_id: str,
+                       ingestion_date: str = None) -> int:
+    """Grava a saida no cache canonico e, se pedido, no path explicito.
 
     Args:
-        data: lista de registros, gerador síncrono, ou gerador assíncrono (streaming).
+        data: lista de registros, gerador sincrono, ou gerador assincrono (streaming).
 
     Returns:
-        Número de registros gravados.
+        Numero de registros gravados.
+
+    Raises:
+        EmptyExtractionError: zero registros onde isso nunca e valido.
     """
     destination = destination or {}
     dest_type = destination.get("type", "local")
 
     if dest_type == "s3":
-        return await _write_s3(data, destination, bundle, name, run_id)
+        return await _write_s3(data, destination, bundle, name, run_id, ingestion_date)
     if dest_type == "local":
         return await _write_local(data, destination, bundle, name, run_id)
     raise ValueError(f"Tipo de destino desconhecido: {dest_type}")
 
 
+def _guard_empty(count: int, bundle: str, name: str, run_id: str, target: str,
+                 existing_size=None) -> None:
+    """Recusa publicar uma extracao vazia. Ver `EmptyExtractionError`.
+
+    Duas regras:
+
+    1. zero registros falha por padrao — nenhum dos extractors que ja zeraram em
+       producao e confiavelmente vazio, entao *falhar* e a polaridade correta;
+    2. mesmo para os de `_ALLOW_EMPTY`, nunca sobrescrever um objeto nao-vazio
+       que ja esta na chave. Foi exatamente isso que a retry de 08-23 fez.
+    """
+    if count > 0:
+        return
+
+    if (bundle, name) not in _ALLOW_EMPTY:
+        raise EmptyExtractionError(
+            f"{bundle}/{name} devolveu 0 registros em {run_id}. Recusando gravar "
+            f"em {target}: este extractor nao tem resultado vazio valido. "
+            f"Se esta semana for legitimamente vazia, adicione o par a _ALLOW_EMPTY."
+        )
+
+    if existing_size:
+        raise EmptyExtractionError(
+            f"{bundle}/{name} devolveu 0 registros em {run_id}, mas {target} ja "
+            f"tem {existing_size} bytes. Recusando sobrescrever dado bom com vazio."
+        )
+
+
+def _head_size(s3, bucket: str, key: str):
+    """ContentLength do objeto, ou None se ele nao existe."""
+    try:
+        return s3.head_object(Bucket=bucket, Key=key)["ContentLength"]
+    except Exception:  # noqa: BLE001 — 404/403 tratados igual: nao ha o que proteger
+        return None
+
+
 async def _write_local(data, destination: dict, bundle: str, name: str, run_id: str) -> int:
     canonical = cache_path(bundle, name, run_id, destination.get("cache_dir"))
-    count = await _dump_json(data, canonical)
+    existing = canonical.stat().st_size if canonical.exists() else None
+
+    tmp = canonical.with_suffix(canonical.suffix + ".part")
+    count = await _dump_ndjson(data, tmp)
+    _guard_empty(count, bundle, name, run_id, str(canonical), existing)
+
+    os.replace(tmp, canonical)  # publicacao atomica: leitor nunca ve arquivo parcial
     print(f"[runner] {count} registros gravados em {canonical}")
 
     explicit = destination.get("path")
     if explicit and Path(explicit) != canonical:
-        # Relê o canônico em vez de reconsumir `data`, que pode ser um iterador.
-        with open(canonical, "r", encoding="utf-8") as fh:
-            await _dump_json(json.load(fh), Path(explicit))
-        print(f"[runner] cópia adicional em {explicit}")
+        # Rele o canonico em vez de reconsumir `data`, que pode ser um iterador.
+        explicit_path = Path(explicit)
+        explicit_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(canonical, "r", encoding="utf-8") as src, \
+                open(explicit_path, "w", encoding="utf-8") as dst:
+            for line in src:
+                dst.write(line)
+        print(f"[runner] copia adicional em {explicit}")
 
     return count
 
 
-async def _write_s3(data, destination: dict, bundle: str, name: str, run_id: str) -> int:
+async def _write_s3(data, destination: dict, bundle: str, name: str, run_id: str,
+                    ingestion_date: str) -> int:
     import boto3
 
     bucket = destination.get("bucket")
-    key = s3_key(bundle, name, run_id)
+    key = s3_key(bundle, name, run_id, ingestion_date)
+    target = f"s3://{bucket}/{key}"
     s3 = boto3.client("s3")
 
-    mpu = s3.create_multipart_upload(Bucket=bucket, Key=key, ContentType="application/json")
-    upload_id = mpu["UploadId"]
+    # O multipart so nasce no primeiro flush. Isso resolve dois problemas de uma
+    # vez: um payload pequeno vira um unico PUT (sem os 3 round-trips do MPU), e
+    # o caso de zero registro nunca precisa subir uma parte de 0 byte, que o
+    # complete_multipart_upload rejeita.
+    upload_id = None
     parts = []
     count = 0
-    buffer = ""
-    part_number = 1
+    buffer = bytearray()
+
+    def _flush(body: bytes) -> None:
+        response = s3.upload_part(
+            Bucket=bucket, Key=key, UploadId=upload_id,
+            PartNumber=len(parts) + 1, Body=body,
+        )
+        parts.append({"ETag": response["ETag"], "PartNumber": len(parts) + 1})
 
     try:
         async for record in _to_async_iter(data):
-            json_str = json.dumps(record, ensure_ascii=False)
-            if count == 0:
-                buffer = "[\n  " + json_str
-            else:
-                buffer += ",\n  " + json_str
+            buffer += (json.dumps(record, ensure_ascii=False) + "\n").encode("utf-8")
             count += 1
 
-            if len(buffer.encode("utf-8")) > _S3_UPLOAD_PART_BYTES:
-                part_data = buffer.encode("utf-8")
-                part_response = s3.upload_part(
-                    Bucket=bucket, Key=key, UploadId=upload_id,
-                    PartNumber=part_number, Body=part_data
-                )
-                parts.append({
-                    "ETag": part_response["ETag"],
-                    "PartNumber": part_number
-                })
-                part_number += 1
-                buffer = ""
+            if len(buffer) > _S3_UPLOAD_PART_BYTES:
+                if upload_id is None:
+                    upload_id = s3.create_multipart_upload(
+                        Bucket=bucket, Key=key, ContentType="application/x-ndjson",
+                    )["UploadId"]
+                _flush(bytes(buffer))
+                buffer = bytearray()
 
-        if buffer or count == 0:
-            if count > 0:
-                buffer += "\n]"
-            else:
-                buffer = "[]"
-            part_data = buffer.encode("utf-8")
-            part_response = s3.upload_part(
-                Bucket=bucket, Key=key, UploadId=upload_id,
-                PartNumber=part_number, Body=part_data
+        # A guarda roda antes de qualquer publicacao. O multipart ja e atomico —
+        # as partes so ficam visiveis no complete — entao o que faltava nao era
+        # uma chave temporaria, era recusar a promocao.
+        _guard_empty(count, bundle, name, run_id, target,
+                     _head_size(s3, bucket, key) if count == 0 else None)
+
+        if upload_id is None:
+            s3.put_object(
+                Bucket=bucket, Key=key, Body=bytes(buffer),
+                ContentType="application/x-ndjson",
             )
-            parts.append({
-                "ETag": part_response["ETag"],
-                "PartNumber": part_number
-            })
+            n_parts = 1
+        else:
+            if buffer:
+                _flush(bytes(buffer))
+            s3.complete_multipart_upload(
+                Bucket=bucket, Key=key, UploadId=upload_id,
+                MultipartUpload={"Parts": parts},
+            )
+            n_parts = len(parts)
 
-        s3.complete_multipart_upload(
-            Bucket=bucket, Key=key, UploadId=upload_id,
-            MultipartUpload={"Parts": parts}
-        )
-        print(f"[runner] {count} registros gravados em s3://{bucket}/{key} ({len(parts)} partes)")
-
-        explicit_prefix = destination.get("prefix")
-        if explicit_prefix:
-            alt_key = f"{explicit_prefix.rstrip('/')}/{name}_{run_id}.json"
-            if alt_key != key:
-                s3.copy_object(
-                    CopySource={"Bucket": bucket, "Key": key},
-                    Bucket=bucket, Key=alt_key
-                )
-                print(f"[runner] cópia adicional em s3://{bucket}/{alt_key}")
-
+        print(f"[runner] {count} registros gravados em {target} ({n_parts} partes)")
         return count
 
     except Exception:
-        s3.abort_multipart_upload(Bucket=bucket, Key=key, UploadId=upload_id)
+        if upload_id is not None:
+            s3.abort_multipart_upload(Bucket=bucket, Key=key, UploadId=upload_id)
         raise
 
 
-async def _dump_json(data, path: Path) -> int:
-    """Serializa registro a registro, sem materializar o JSON inteiro em memória.
+async def _dump_ndjson(data, path: Path) -> int:
+    """Serializa registro a registro, sem materializar o JSON inteiro em memoria.
 
-    ``json.dumps(lista, indent=2)`` constrói uma segunda cópia integral em
-    string. Para ``votacoesVotos`` (~1,1M registros) isso é centenas de MB
-    desnecessários no pico.
+    ``json.dumps(lista, indent=2)`` constroi uma segunda copia integral em
+    string. Para ``votacoesVotos`` (~1,1M registros) isso e centenas de MB
+    desnecessarios no pico.
     """
     path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(path.suffix + ".part")
 
     count = 0
-    with open(tmp, "w", encoding="utf-8") as fh:
-        fh.write("[")
+    with open(path, "w", encoding="utf-8") as fh:
         async for record in _to_async_iter(data):
-            fh.write("\n  " if count == 0 else ",\n  ")
             fh.write(json.dumps(record, ensure_ascii=False))
+            fh.write("\n")
             count += 1
-        fh.write("\n]" if count else "]")
-
-    os.replace(tmp, path)  # publicação atômica: leitor nunca vê arquivo parcial
     return count
 
 
 async def _to_async_iter(data):
-    """Normaliza lista/gerador síncrono/gerador assíncrono num async for."""
+    """Normaliza lista/gerador sincrono/gerador assincrono num async for."""
     if inspect.isasyncgen(data):
         async for item in data:
             yield item
