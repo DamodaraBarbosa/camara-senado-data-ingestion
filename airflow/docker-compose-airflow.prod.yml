@@ -49,7 +49,6 @@
 # set runnable at all: 31MB of free RAM at peak means every burst lands in
 # swap. Before it existed the host OOM-killed the scheduler five times
 # between Aug 30 and Aug 31 2026 and then went unreachable for four days.
-version: '3.8'
 
 x-airflow-common:
   &airflow-common
