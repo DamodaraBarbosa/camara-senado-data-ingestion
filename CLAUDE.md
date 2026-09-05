@@ -131,6 +131,11 @@ if param_name not in resolved_params:
   the `(bundle, extractor)` pair is in `_ALLOW_EMPTY`, and even then it never overwrites a
   non-empty object. This is the fix for `scheduled__2026-08-23`, where a retry wrote `[]` over
   42,050 records and all 56 tasks still reported `success`.
+- **`_ALLOW_EMPTY` is empty, deliberately.** No known extractor has a valid empty result. The
+  2026-09-05 production run proved it: `eventos/pauta` and `eventos/votacoes` had been listed
+  there on the theory that they were time-window dependent, and both wrote hundreds of KB as
+  soon as the API answered. Every empty file ever seen in `raw/` traces back to an upstream
+  failure, not to absent data — so an entry here needs evidence, never a hypothesis.
 - Optional explicit path: `destination["path"]` (for custom output location).
 - **S3 write**: multipart upload, buffered (8 MB chunks), streams records row-by-row → no materialization of full JSON in memory.
 - Returns: count of records written.
