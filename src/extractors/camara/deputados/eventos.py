@@ -1,5 +1,5 @@
 from extractors.camara.base import CamaraBaseExtractor
-from utils.concurrency import gather_aligned
+from utils.concurrency import assert_usable, gather_aligned
 import json
 import aiohttp
 
@@ -36,10 +36,15 @@ class AsyncEventosExtractor(CamaraBaseExtractor):
 
             tasks = [self._fetch_all_eventos_for_deputado(session, deputado_id, start_legislatura_date, items)
                      for deputado_id in deputados_ids]
-            results, coverage, _errors = await gather_aligned(tasks, label='deputados/eventos')
+            results, coverage, errors = await gather_aligned(tasks, label='deputados/eventos')
 
             for eventos in results:
+                # gather_aligned devolve None onde a requisicao falhou; a cobertura ja
+                # contabilizou isso. Sem esta guarda, um unico 504 derruba o extractor.
+                if eventos is None:
+                    continue
                 all_eventos.extend(eventos)
 
             self.partial = coverage < 0.99
+            assert_usable(all_eventos, coverage, errors, label='deputados/eventos')
         return all_eventos
