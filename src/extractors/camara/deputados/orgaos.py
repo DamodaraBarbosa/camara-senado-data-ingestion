@@ -1,5 +1,5 @@
 from extractors.camara.base import CamaraBaseExtractor
-from utils.concurrency import gather_aligned
+from utils.concurrency import assert_usable, gather_aligned
 import json
 import aiohttp
 
@@ -33,12 +33,13 @@ class AsyncOrgaosExtractor(CamaraBaseExtractor):
                 self._fetch_deputado(session, deputado_id, start_legislatura_date, items)
                 for deputado_id in deputados_ids
             ]
-            results, coverage, _errors = await gather_aligned(tasks, label='deputados/orgaos')
+            results, coverage, errors = await gather_aligned(tasks, label='deputados/orgaos')
 
-            all_bodies = [body for bodies in results for body in bodies]
+            all_bodies = [body for bodies in results if bodies for body in bodies]
             print(f'[orgaos] Extração concluída | total de orgãos: {len(all_bodies)}')
 
             self.partial = coverage < 0.99
+            assert_usable(all_bodies, coverage, errors, label='deputados/orgaos')
         return all_bodies
 
     async def _fetch_deputado(self, session, deputado_id, start_legislatura_date, items):

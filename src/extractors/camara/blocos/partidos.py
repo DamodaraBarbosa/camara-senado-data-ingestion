@@ -1,5 +1,5 @@
 from extractors.camara.base import CamaraBaseExtractor
-from utils.concurrency import gather_aligned
+from utils.concurrency import assert_usable, gather_aligned
 import aiohttp
 
 
@@ -20,9 +20,13 @@ class AsyncBlocosPartidosExtractor(CamaraBaseExtractor):
                 task = self.client.get(session, self.ENDPOINT.format(id=bloco))
                 tasks.append(task)
 
-            results, coverage, _errors = await gather_aligned(tasks, label='blocos/partidos')
+            results, coverage, errors = await gather_aligned(tasks, label='blocos/partidos')
 
             for i, result in enumerate(results):
+                # gather_aligned devolve None onde a requisicao falhou; a cobertura ja
+                # contabilizou isso. Sem esta guarda, um unico 504 derruba o extractor.
+                if result is None:
+                    continue
                 partidos_data = result.get('dados', [])
                 bloco_id = blocos_ids[i]
                 for partido in partidos_data:
@@ -30,4 +34,5 @@ class AsyncBlocosPartidosExtractor(CamaraBaseExtractor):
                 all_partidos.extend(partidos_data)
 
         self.partial = coverage < 0.99
+        assert_usable(all_partidos, coverage, errors, label='blocos/partidos')
         return all_partidos
