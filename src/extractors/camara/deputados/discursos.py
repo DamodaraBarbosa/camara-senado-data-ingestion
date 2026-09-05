@@ -1,5 +1,5 @@
 from extractors.camara.base import CamaraBaseExtractor
-from utils.concurrency import gather_aligned
+from utils.concurrency import assert_usable, gather_aligned
 import json
 import aiohttp
 
@@ -33,12 +33,13 @@ class AsyncDiscursosExtractor(CamaraBaseExtractor):
                 for deputado_id in deputados_ids
                 for legislatura_id in legislaturas_range
             ]
-            results, coverage, _errors = await gather_aligned(tasks, label='deputados/discursos')
+            results, coverage, errors = await gather_aligned(tasks, label='deputados/discursos')
 
-            all_discursos = [discurso for discursos in results for discurso in discursos]
+            all_discursos = [discurso for discursos in results if discursos for discurso in discursos]
             print(f'[discursos] Extração concluída | total de discursos: {len(all_discursos)}')
 
             self.partial = coverage < 0.99
+            assert_usable(all_discursos, coverage, errors, label='deputados/discursos')
         return all_discursos
 
     async def _fetch_deputado(self, session, deputado_id, legislatura_id, items):
