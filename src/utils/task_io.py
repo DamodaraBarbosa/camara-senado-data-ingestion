@@ -42,20 +42,28 @@ STRICT_DEPENDENCY_CACHE = os.getenv("STRICT_DEPENDENCY_CACHE", "1") not in ("0",
 
 DEFAULT_CACHE_DIR = os.getenv("CAMARA_CACHE_DIR", "/tmp")
 
-# Extractors que podem legitimamente devolver zero registros. Todo o resto falha
-# alto quando a contagem e zero — ver `_guard_empty`.
+# Pares (bundle, extractor) que podem legitimamente devolver zero registros.
+# Todo o resto falha alto quando a contagem e zero — ver `_guard_empty`.
 #
-# A lista comeca minima de proposito. Varrendo os objetos de ate 10 bytes em
-# s3://dataplatform-camara-prod-db/raw/, 16 objetos vazios apareceram em 10 pares
-# (bundle, extractor) distintos ao longo de 4 runs — e **todos os 10 produziram
-# dado em pelo menos uma run**. Ou seja, nenhum e confiavelmente vazio e o vazio
-# e intermitente. Estes dois entram porque vieram vazios em 3 das 4 runs, o que e
-# consistente com dependerem da janela temporal (uma pauta so existe para evento
-# futuro ja agendado), nao com o bug de sobrescrita.
-_ALLOW_EMPTY = {
-    ("eventos", "pauta"),
-    ("eventos", "votacoes"),
-}
+# **Esta lista esta vazia de proposito: nenhum extractor conhecido tem resultado
+# vazio valido.**
+#
+# Ela chegou a conter ("eventos", "pauta") e ("eventos", "votacoes"), porque os
+# dois vieram vazios em 3 das 4 runs historicas e isso parecia consistente com
+# dependerem da janela temporal — uma pauta so existiria para evento futuro ja
+# agendado. A run manual de producao de 2026-09-05 desmentiu isso: apos o retry,
+# `eventos/pauta` gravou 792 KB e `eventos/votacoes`, 149 KB. Os vazios
+# historicos eram a mesma instabilidade de API que derrubou outras tasks naquela
+# run (Connection timeout em /legislaturas e /referencias/tiposAutor, HTTP 504
+# em eventos/{id}/pauta), nao ausencia de dados.
+#
+# Conclusao empirica: os 10 pares que ja zeraram em producao produzem dado
+# quando a API responde. Manter os dois na lista deixaria o guard desligado
+# justamente nos datasets que mais falham.
+#
+# O mecanismo continua existindo para o dia em que um extractor genuinamente
+# vazio aparecer — mas a entrada precisa vir com evidencia, nao com hipotese.
+_ALLOW_EMPTY = frozenset()
 
 _ISO_DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
 
