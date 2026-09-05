@@ -294,24 +294,53 @@ async def test_zero_records_fails_loudly(s3, s3_dest):
     assert s3.objects == {}
 
 
-async def test_zero_records_does_not_overwrite_good_data(s3, s3_dest):
+@pytest.fixture
+def allow_empty(monkeypatch):
+    """Injeta um par ficticio em _ALLOW_EMPTY.
+
+    O mecanismo de exceção precisa continuar coberto, mas amarrar o teste a um
+    extractor real amarraria também a configuração de produção — e a lista real
+    está vazia justamente porque nenhum extractor conhecido é vazio de verdade.
+    """
+    monkeypatch.setattr(task_io, "_ALLOW_EMPTY", frozenset({("b", "vazio_ok")}))
+
+
+def test_production_allowlist_is_empty():
+    """Trava a descoberta da run de 2026-09-05.
+
+    `eventos/pauta` e `eventos/votacoes` estiveram nesta lista por hipótese e
+    gravaram 792 KB e 149 KB assim que a API respondeu. Uma entrada aqui desliga
+    o guard para aquele dataset, então só entra com evidência.
+    """
+    assert task_io._ALLOW_EMPTY == frozenset()
+
+
+async def test_zero_records_does_not_overwrite_good_data(s3, s3_dest, allow_empty):
     """O incidente exato: a retry gravou `[]` sobre 42.050 registros."""
-    key = s3_key("eventos", "pauta", "r1", DATE)
+    key = s3_key("b", "vazio_ok", "r1", DATE)
     s3.objects[key] = b'{"id": 1}\n' * 100
 
     with pytest.raises(EmptyExtractionError, match="sobrescrever"):
-        await write_output([], s3_dest, "eventos", "pauta", "r1", DATE)
+        await write_output([], s3_dest, "b", "vazio_ok", "r1", DATE)
 
     assert s3.objects[key] == b'{"id": 1}\n' * 100
 
 
-async def test_allowlisted_extractor_may_write_an_empty_first_load(s3, s3_dest):
-    """`eventos/pauta` veio vazio em 3 das 4 runs — depende da janela temporal."""
-    assert await write_output([], s3_dest, "eventos", "pauta", "r1", DATE) == 0
+async def test_allowlisted_extractor_may_write_an_empty_first_load(s3, s3_dest, allow_empty):
+    """A exceção só vale para particão nova, e nunca via parte de 0 byte."""
+    assert await write_output([], s3_dest, "b", "vazio_ok", "r1", DATE) == 0
 
-    key = s3_key("eventos", "pauta", "r1", DATE)
+    key = s3_key("b", "vazio_ok", "r1", DATE)
     assert s3.objects[key] == b""
     assert s3.put_calls == [key]  # nunca uma parte de 0 byte
+
+
+async def test_eventos_pauta_no_longer_bypasses_the_guard(s3, s3_dest):
+    """Regressão direta: este par passava batido e gravava 2 bytes."""
+    with pytest.raises(EmptyExtractionError, match="0 registros"):
+        await write_output([], s3_dest, "eventos", "pauta", "r1", DATE)
+
+    assert s3.objects == {}
 
 
 async def test_zero_records_aborts_the_multipart_upload(s3, s3_dest, monkeypatch):
