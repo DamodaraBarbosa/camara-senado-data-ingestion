@@ -141,12 +141,22 @@ def build_dag(dag_id: str, config_path: Path, s3_bucket: str, schedule_interval)
                 event_payload = {
                     "extractor": extractor,
                     "params": params,
+                    # Sem "prefix": ele gerava uma copia adicional da saida, que
+                    # era inerte enquanto a chave canonica coincidia com ela.
+                    # Com a particao na chave, passaria a duplicar cada arquivo
+                    # fora da particao — 632 MB so em despesas — e a espalhar
+                    # arquivos soltos na raiz do LOCATION da tabela Glue.
                     "destination": {
                         "type": "s3",
-                        "bucket": s3_bucket,
-                        "prefix": f"raw/{bundle_name}/{extractor}"
+                        "bucket": s3_bucket
                     },
-                    "run_id": "{{ run_id }}"
+                    "run_id": "{{ run_id }}",
+                    # Particao Hive do raw/. `data_interval_end` e nao `ds`:
+                    # num pipeline de snapshot a particao deve nomear a data em
+                    # que o mundo foi capturado (o fim da janela), nao o inicio
+                    # dela. Identico nas 56 tasks da mesma dagrun, que e o que
+                    # mantem leitura e escrita de dependencia na mesma particao.
+                    "ingestion_date": "{{ data_interval_end | ds }}"
                 }
 
                 # Create the ECS task operator

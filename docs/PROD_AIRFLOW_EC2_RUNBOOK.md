@@ -274,7 +274,7 @@ aws ssm start-session \
   --region us-east-1
 ```
 
-Open http://localhost:8080 (user `airflow` / password `airflow` — same as the local dev stack; consider changing it via the UI after first login). When done, stop it so the instance goes back to its light footprint:
+Open http://localhost:8080. The admin user is `airflow`; the password is whatever `AIRFLOW_ADMIN_PASSWORD` holds in `airflow/.env` on the host (step 7b) — **not** the `airflow`/`airflow` of the local dev stack, which this file used to instruct and which step 7b removed. When done, stop it so the instance goes back to its light footprint:
 
 ```bash
 docker compose -f docker-compose-airflow.prod.yml --profile ui stop webserver

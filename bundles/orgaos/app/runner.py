@@ -17,7 +17,7 @@ import inspect
 import json
 
 from clients.camara_client import AsyncCamaraClient
-from utils.task_io import read_dependency, write_output
+from utils.task_io import read_dependency, resolve_ingestion_date, write_output
 from extractors.camara.orgaos.orgaos import AsyncOrgaosExtractor
 from extractors.camara.orgaos.ids import AsyncOrgaosIdsExtractor
 from extractors.camara.orgaos.codigo_situacao import AsyncCodigoSituacaoOrgaoExtractor
@@ -79,6 +79,9 @@ async def _run(event: dict):
     params = event.get("params", {})
     destination = event.get("destination", {})
     run_id = event.get("run_id", "local")
+    # Resolvido uma vez e repassado a leitura e escrita: as duas precisam
+    # concordar na particao, e elas rodam em tasks ECS diferentes.
+    ingestion_date = resolve_ingestion_date(event)
 
     extractor_cls = EXTRACTORS.get(extractor_name)
     if not extractor_cls:
@@ -99,7 +102,7 @@ async def _run(event: dict):
             )
 
             # Try to load from cache first (S3 or local)
-            cached_data = read_dependency(destination, bundle_name, dependency, run_id)
+            cached_data = read_dependency(destination, bundle_name, dependency, run_id, ingestion_date)
             if cached_data is not None:
                 resolved_params[param_name] = cached_data
                 continue
@@ -121,7 +124,7 @@ async def _run(event: dict):
     extractor_instance = extractor_cls(client)
     data = await extractor_instance.extract(**filtered_params)
 
-    records = await write_output(data, destination, bundle_name, extractor_name, run_id)
+    records = await write_output(data, destination, bundle_name, extractor_name, run_id, ingestion_date)
 
     # Check if extraction was partial (timeout or budget exhaustion)
     status = "partial" if getattr(extractor_instance, "partial", False) else "success"
