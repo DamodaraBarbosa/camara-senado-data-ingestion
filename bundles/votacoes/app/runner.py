@@ -46,7 +46,12 @@ DEPENDENCIES = {
 # timeout em silencio. Com o parse cancelavel (BulkParseTimeout), o limite passou
 # a valer de verdade — e precisa refletir quanto o trabalho realmente leva, senao
 # extractors que hoje terminam passariam a falhar.
-_TIMEOUT_OVERRIDES = {'votos': 3000}
+#
+# `votacoes` recebeu override em 2026-09-13: a run scheduled__2026-07-26 falhou
+# com EmptyExtractionError (0 registros), mas a API tinha milhares de votacoes
+# disponiveis naquele momento — indicando timeout/rate-limit silencioso sob o
+# default de 600s, nao ausencia real de dados.
+_TIMEOUT_OVERRIDES = {'votos': 3000, 'votacoes': 1800}
 _DEFAULT_TIMEOUT = 600
 
 

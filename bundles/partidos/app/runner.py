@@ -39,14 +39,20 @@ DEPENDENCIES = {
 
 # Timeouts dimensionados pelas duracoes reais da run de producao
 # scheduled__2026-08-23 (medidas no metadata DB do Airflow), nao por estimativa.
-# Nenhum extractor deste bundle passou de 600s na medicao.
+# Nenhum extractor deste bundle passou de 600s nessa medicao.
 #
 # Ate agora estes numeros eram ficcao: o parse do CSV rodava em asyncio.to_thread,
 # que asyncio.wait_for nao consegue cancelar, entao a task ultrapassava o proprio
 # timeout em silencio. Com o parse cancelavel (BulkParseTimeout), o limite passou
 # a valer de verdade — e precisa refletir quanto o trabalho realmente leva, senao
 # extractors que hoje terminam passariam a falhar.
-_TIMEOUT_OVERRIDES = {}
+#
+# `lideres` recebeu override em 2026-09-13: a run scheduled__2026-09-06 falhou
+# com EmptyExtractionError (0 registros), mas a API tinha lideres para a maioria
+# dos partidos naquele momento — indicando timeout/rate-limit silencioso, nao
+# ausencia real de dados. 1800s da margem para os retries de 429 do client
+# absorverem instabilidade sem estourar o default de 600s.
+_TIMEOUT_OVERRIDES = {'lideres': 1800}
 _DEFAULT_TIMEOUT = 600
 
 
