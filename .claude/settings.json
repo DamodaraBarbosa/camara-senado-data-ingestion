@@ -1,0 +1,51 @@
+{
+  "permissions": {
+    "deny": [
+      {
+        "tool": "Read",
+        "paths": [
+          ".env*",
+          "airflow/.env",
+          "~/.aws/credentials"
+        ],
+        "reason": "Sensitive: env files and AWS credentials contain secrets"
+      },
+      {
+        "tool": "Edit",
+        "paths": [
+          ".env*",
+          "airflow/.env",
+          ".claude/settings.local.json"
+        ],
+        "reason": "Sensitive: never commit env files or modify local settings"
+      },
+      {
+        "tool": "Bash",
+        "command": "git push --force*",
+        "reason": "Destructive: force-push rewrites history. Use normal push via PR."
+      },
+      {
+        "tool": "Bash",
+        "command": "terraform *",
+        "reason": "Out of scope: Terraform lives in camara-senado-data-infra repo"
+      },
+      {
+        "tool": "Bash",
+        "command": "aws ssm *",
+        "reason": "High privilege: requires explicit approval for production access"
+      },
+      {
+        "tool": "Bash",
+        "command": "aws ecs * task",
+        "reason": "High privilege: ECS task operations affect production; requires approval"
+      }
+    ]
+  },
+  "comments": {
+    "env_docker_is_tracked": ".env.docker is tracked in git with placeholder values (safe). Never print or add real credentials.",
+    "public_repo": "This is a public repository. Use <PLACEHOLDER> format for AWS account IDs and infrastructure identifiers in docs.",
+    "bundled_runners_are_duplicates": "The 10 runners (bundles/*/app/runner.py) are near-duplicates. Changes must be applied to all 10.",
+    "dag_name_has_typo": "The DAG file is camera_ingestion_dag.py (not camara). The typo is load-bearing; do not rename.",
+    "local_venv_needs_python_311": "Local .venv on Python 3.8 fails bulk-client tests. Recreate on 3.11+ for accurate test results."
+  }
+}
