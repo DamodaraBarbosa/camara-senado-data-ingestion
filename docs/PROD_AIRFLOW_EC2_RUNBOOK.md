@@ -341,19 +341,23 @@ docker compose -f docker-compose-airflow.prod.yml exec scheduler \
 
 `AIRFLOW__CORE__PARALLELISM`/`max_active_tasks_per_dag` (both `2`) do **not** cap how many `EcsRunTaskOperator` tasks run concurrently against the real Fargate/`camara.leg.br` side. A deferred task releases its scheduler slot the instant it hands off to the triggerer — that is the entire point of deferring — so those settings only ever throttled the near-instant window before each task defers, never the actual wait. The 2026-09-01 known-good baseline (8b) even recorded "10 [deferred] at peak, with `PARALLELISM: 2`" as the expected shape of a healthy run. This stayed invisible as long as no single bundle's fan-out was large enough to stress `camara.leg.br`'s ~10rps/IP ceiling — until `eventos/{ids,deputados,orgaos,pauta,votacoes}` started issuing ~10,850 requests each (one per event, after the 2026-10-04 date-filter fix) and 5 of them landed concurrently: their independent 8rps clients combined past the real ceiling and one timed out at its 3600s budget.
 
-Pool slots, unlike `max_active_tasks`, are held for a task's entire deferred lifetime, so this is the lever that actually caps concurrent external load. Create it once per metadata DB (survives container recreate, lost if the postgres volume is ever reinitialized — same category as the admin password above):
+Pool slots are, by default, **released the same way `max_active_tasks` slots are** — the instant a task defers — which defeats the entire point of using a pool here. The flag that changes that is `--include-deferred`, added in Airflow 2.7+: without it, a pool is no more effective at capping real concurrency than `parallelism` was. This was not theoretical: the pool was first created without the flag on 2026-10-04, and a full DAG re-run immediately hit 8 concurrent ECS tasks before anyone noticed — `airflow pools list` showing `include_deferred: False` is what gave it away. Create (or fix) it with the flag:
 
 ```bash
 docker compose -f docker-compose-airflow.prod.yml exec scheduler \
   airflow pools set camara_api_pool 2 \
-  "Caps concurrent ECS tasks hitting the rate-limited camara.leg.br API (deferred tasks release max_active_tasks slots, so that setting alone does not throttle real concurrency)"
+  "Caps concurrent ECS tasks hitting the rate-limited camara.leg.br API" \
+  --include-deferred
 ```
 
 It must exist **before** the scheduler next parses `camera_ingestion_dag.py` — every `EcsRunTaskOperator` there references it by name (`pool="camara_api_pool"`), and a task whose pool does not exist queues and never runs, with no loud error.
 
 ```bash
-docker compose -f docker-compose-airflow.prod.yml exec scheduler airflow pools list   # confirms slots=2
+docker compose -f docker-compose-airflow.prod.yml exec scheduler airflow pools list
+# confirms slots=2 AND include_deferred=True — check both; the slot count alone proves nothing
 ```
+
+**Re-running this command on a pool that already has tasks queued or deferred does not retroactively enforce the new limit** — Airflow only applies it going forward, from the next scheduling pass. Any task instance that started before the fix keeps running regardless of how many siblings are already in flight.
 
 ## 8. Validate
 
