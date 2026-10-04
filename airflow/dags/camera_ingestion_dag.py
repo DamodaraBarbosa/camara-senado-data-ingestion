@@ -180,6 +180,26 @@ def build_dag(dag_id: str, config_path: Path, s3_bucket: str, schedule_interval)
                     network_configuration=NETWORK_CONFIGURATION,
                     aws_conn_id="aws_default",
                     region_name=config.get("region", "us-east-1"),
+                    # `max_active_tasks_per_dag`/`parallelism` (both set to 2) do NOT
+                    # cap how many of these run concurrently: a deferred operator
+                    # releases its scheduler slot the instant it hands off to the
+                    # triggerer (that's the point of deferring), so the "2" never
+                    # applied to real concurrent ECS tasks — only to the near-instant
+                    # window before each one defers. The 2026-09-01 known-good baseline
+                    # even logged "10 [deferred] at peak, with PARALLELISM: 2" as
+                    # normal. It stayed invisible because no single bundle fanned out
+                    # enough HTTP requests for camara.leg.br's ~10rps/IP ceiling to
+                    # matter — until eventos/{ids,deputados,orgaos,pauta,votacoes}
+                    # started doing ~10,850 requests each (one per event) and 5 of
+                    # them landed concurrently on 2026-10-04: their independent 8rps
+                    # clients combined past the real ceiling and one timed out at
+                    # 3600s. Pool slots, unlike max_active_tasks, are held for the
+                    # whole deferred lifetime, so this is the lever that actually
+                    # caps concurrent *external* API load. Created once via
+                    # `airflow pools set camara_api_pool 2 ...` (see
+                    # docs/PROD_AIRFLOW_EC2_RUNBOOK.md) — must exist before the
+                    # scheduler parses this file, or tasks queue and never run.
+                    pool="camara_api_pool",
                     # Deferrable mode is switched on per-environment via
                     # AIRFLOW__OPERATORS__DEFAULT_DEFERRABLE (the operator reads
                     # it as its `deferrable` default), so this DAG file still

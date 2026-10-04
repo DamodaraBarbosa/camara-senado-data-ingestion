@@ -337,6 +337,24 @@ docker compose -f docker-compose-airflow.prod.yml exec scheduler \
   airflow users reset-password --username airflow
 ```
 
+## 7c. Airflow pool (`camara_api_pool`)
+
+`AIRFLOW__CORE__PARALLELISM`/`max_active_tasks_per_dag` (both `2`) do **not** cap how many `EcsRunTaskOperator` tasks run concurrently against the real Fargate/`camara.leg.br` side. A deferred task releases its scheduler slot the instant it hands off to the triggerer — that is the entire point of deferring — so those settings only ever throttled the near-instant window before each task defers, never the actual wait. The 2026-09-01 known-good baseline (8b) even recorded "10 [deferred] at peak, with `PARALLELISM: 2`" as the expected shape of a healthy run. This stayed invisible as long as no single bundle's fan-out was large enough to stress `camara.leg.br`'s ~10rps/IP ceiling — until `eventos/{ids,deputados,orgaos,pauta,votacoes}` started issuing ~10,850 requests each (one per event, after the 2026-10-04 date-filter fix) and 5 of them landed concurrently: their independent 8rps clients combined past the real ceiling and one timed out at its 3600s budget.
+
+Pool slots, unlike `max_active_tasks`, are held for a task's entire deferred lifetime, so this is the lever that actually caps concurrent external load. Create it once per metadata DB (survives container recreate, lost if the postgres volume is ever reinitialized — same category as the admin password above):
+
+```bash
+docker compose -f docker-compose-airflow.prod.yml exec scheduler \
+  airflow pools set camara_api_pool 2 \
+  "Caps concurrent ECS tasks hitting the rate-limited camara.leg.br API (deferred tasks release max_active_tasks slots, so that setting alone does not throttle real concurrency)"
+```
+
+It must exist **before** the scheduler next parses `camera_ingestion_dag.py` — every `EcsRunTaskOperator` there references it by name (`pool="camara_api_pool"`), and a task whose pool does not exist queues and never runs, with no loud error.
+
+```bash
+docker compose -f docker-compose-airflow.prod.yml exec scheduler airflow pools list   # confirms slots=2
+```
+
 ## 8. Validate
 
 1. `docker compose -f docker-compose-airflow.prod.yml ps` shows `postgres-airflow`, `scheduler` and `triggerer` healthy by default (no `webserver` — see step 7), with stable (not repeatedly resetting) uptimes. `uptime` shows a `load average` well under 2.0 (2 vCPUs) a few minutes after startup. `free -m` shows the 2GB swapfile present and the three containers sitting around 620-690MB total in `docker stats`.
