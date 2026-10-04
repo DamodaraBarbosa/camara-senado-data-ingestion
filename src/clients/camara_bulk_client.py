@@ -31,6 +31,10 @@ from utils.budget import task_deadline
 _BULK_TIMEOUT = aiohttp.ClientTimeout(total=None, connect=30, sock_read=60)
 
 _ARQUIVOS = "https://dadosabertos.camara.leg.br/arquivos"
+
+# Same edge block as AsyncCamaraClient (see camara_client.py): aiohttp's default
+# User-Agent gets a bare 403 from camara.leg.br since 2026-10-04.
+_HEADERS = {"User-Agent": "camara-senado-data-ingestion/1.0"}
 _CACHE_DIR = os.getenv("CAMARA_BULK_CACHE", "/tmp/camara_bulk")
 _TTL_SECONDS = int(os.getenv("CAMARA_BULK_TTL_S", 21600))  # 6h; files are daily
 
@@ -201,7 +205,7 @@ class CamaraBulkClient:
     async def _download(self, url: str, dest: Path):
         part = dest.with_suffix(dest.suffix + ".part")
         offset = part.stat().st_size if part.exists() else 0
-        headers = {"Range": f"bytes={offset}-"} if offset else {}
+        headers = {**_HEADERS, "Range": f"bytes={offset}-"} if offset else dict(_HEADERS)
 
         session = aiohttp.ClientSession(timeout=_BULK_TIMEOUT)
         try:
@@ -263,7 +267,7 @@ class CamaraBulkClient:
             async def probe(part):
                 async with sem:
                     try:
-                        async with session.get(spec.url(part), headers={"Range": "bytes=0-0"}) as r:
+                        async with session.get(spec.url(part), headers={**_HEADERS, "Range": "bytes=0-0"}) as r:
                             if r.status == 404:
                                 return None
                             total = _content_range_total(r.headers.get("Content-Range"))
