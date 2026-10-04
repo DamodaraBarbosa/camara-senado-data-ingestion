@@ -52,7 +52,20 @@ DEPENDENCIES = {
 # timeout em silencio. Com o parse cancelavel (BulkParseTimeout), o limite passou
 # a valer de verdade — e precisa refletir quanto o trabalho realmente leva, senao
 # extractors que hoje terminam passariam a falhar.
-_TIMEOUT_OVERRIDES = {}
+#
+# ids/deputados/orgaos/pauta/votacoes fazem 1 requisicao HTTP por evento.
+# eventos/eventos.py so passou a filtrar por dataInicio/dataFim da legislatura
+# em 2026-10-04 (antes devolvia so a janela estreita default da API, ~1 evento);
+# corrigido, a legislatura atual tem ~11.400 eventos — a 8 req/s isso e ~1425s
+# so de rede por extractor. 3600s (mesma margem de despesas) da folga para
+# paginacao e eventuais pausas do circuit breaker.
+_TIMEOUT_OVERRIDES = {
+    "ids": 3600,
+    "deputados": 3600,
+    "orgaos": 3600,
+    "pauta": 3600,
+    "votacoes": 3600,
+}
 _DEFAULT_TIMEOUT = 600
 
 
