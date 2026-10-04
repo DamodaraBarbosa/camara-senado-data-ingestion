@@ -13,6 +13,12 @@ from tenacity import retry, wait_exponential, retry_if_exception_type
 # - connect: 30s to establish connection
 _TIMEOUT = aiohttp.ClientTimeout(total=90, connect=30)
 
+# aiohttp's default User-Agent ("Python/3.x aiohttp/x.y.z") is blocked with a bare
+# 403 by camara.leg.br's edge as of 2026-10-04 — it filters on that literal string,
+# not on generic bot heuristics (python-requests and even curl pass through fine).
+# Identify ourselves honestly instead of spoofing a browser.
+_HEADERS = {"User-Agent": "camara-senado-data-ingestion/1.0"}
+
 # Status codes that warrant retry
 _RETRYABLE_STATUSES = {429, 500, 502, 503, 504}
 
@@ -210,7 +216,7 @@ class AsyncCamaraClient:
         await self._limiter.acquire()
 
         async with self.semaphore:
-            async with session.get(url, params=params, timeout=_TIMEOUT) as response:
+            async with session.get(url, params=params, timeout=_TIMEOUT, headers=_HEADERS) as response:
                 if response.status == 404:
                     self._consecutive_server_errors = 0
                     return {}
