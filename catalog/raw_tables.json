@@ -1,0 +1,430 @@
+{
+  "format": "ndjson",
+  "partition_key": {
+    "name": "ingestion_date",
+    "type": "date",
+    "format": "yyyy-MM-dd"
+  },
+  "tables": [
+    {
+      "bundle": "blocos",
+      "name": "blocos",
+      "table": "blocos__blocos",
+      "prefix": "raw/blocos/blocos/",
+      "location_template": "raw/blocos/blocos/ingestion_date=${ingestion_date}/"
+    },
+    {
+      "bundle": "blocos",
+      "name": "ids",
+      "table": "blocos__ids",
+      "prefix": "raw/blocos/ids/",
+      "location_template": "raw/blocos/ids/ingestion_date=${ingestion_date}/"
+    },
+    {
+      "bundle": "blocos",
+      "name": "partidos",
+      "table": "blocos__partidos",
+      "prefix": "raw/blocos/partidos/",
+      "location_template": "raw/blocos/partidos/ingestion_date=${ingestion_date}/"
+    },
+    {
+      "bundle": "deputados",
+      "name": "codigo_situacao",
+      "table": "deputados__codigo_situacao",
+      "prefix": "raw/deputados/codigo_situacao/",
+      "location_template": "raw/deputados/codigo_situacao/ingestion_date=${ingestion_date}/"
+    },
+    {
+      "bundle": "deputados",
+      "name": "deputados",
+      "table": "deputados__deputados",
+      "prefix": "raw/deputados/deputados/",
+      "location_template": "raw/deputados/deputados/ingestion_date=${ingestion_date}/"
+    },
+    {
+      "bundle": "deputados",
+      "name": "despesas",
+      "table": "deputados__despesas",
+      "prefix": "raw/deputados/despesas/",
+      "location_template": "raw/deputados/despesas/ingestion_date=${ingestion_date}/"
+    },
+    {
+      "bundle": "deputados",
+      "name": "discursos",
+      "table": "deputados__discursos",
+      "prefix": "raw/deputados/discursos/",
+      "location_template": "raw/deputados/discursos/ingestion_date=${ingestion_date}/"
+    },
+    {
+      "bundle": "deputados",
+      "name": "eventos",
+      "table": "deputados__eventos",
+      "prefix": "raw/deputados/eventos/",
+      "location_template": "raw/deputados/eventos/ingestion_date=${ingestion_date}/"
+    },
+    {
+      "bundle": "deputados",
+      "name": "frentes",
+      "table": "deputados__frentes",
+      "prefix": "raw/deputados/frentes/",
+      "location_template": "raw/deputados/frentes/ingestion_date=${ingestion_date}/"
+    },
+    {
+      "bundle": "deputados",
+      "name": "historico",
+      "table": "deputados__historico",
+      "prefix": "raw/deputados/historico/",
+      "location_template": "raw/deputados/historico/ingestion_date=${ingestion_date}/"
+    },
+    {
+      "bundle": "deputados",
+      "name": "ids",
+      "table": "deputados__ids",
+      "prefix": "raw/deputados/ids/",
+      "location_template": "raw/deputados/ids/ingestion_date=${ingestion_date}/"
+    },
+    {
+      "bundle": "deputados",
+      "name": "lideres",
+      "table": "deputados__lideres",
+      "prefix": "raw/deputados/lideres/",
+      "location_template": "raw/deputados/lideres/ingestion_date=${ingestion_date}/"
+    },
+    {
+      "bundle": "deputados",
+      "name": "mandatos_externos",
+      "table": "deputados__mandatos_externos",
+      "prefix": "raw/deputados/mandatos_externos/",
+      "location_template": "raw/deputados/mandatos_externos/ingestion_date=${ingestion_date}/"
+    },
+    {
+      "bundle": "deputados",
+      "name": "mesa",
+      "table": "deputados__mesa",
+      "prefix": "raw/deputados/mesa/",
+      "location_template": "raw/deputados/mesa/ingestion_date=${ingestion_date}/"
+    },
+    {
+      "bundle": "deputados",
+      "name": "ocupacoes",
+      "table": "deputados__ocupacoes",
+      "prefix": "raw/deputados/ocupacoes/",
+      "location_template": "raw/deputados/ocupacoes/ingestion_date=${ingestion_date}/"
+    },
+    {
+      "bundle": "deputados",
+      "name": "orgaos",
+      "table": "deputados__orgaos",
+      "prefix": "raw/deputados/orgaos/",
+      "location_template": "raw/deputados/orgaos/ingestion_date=${ingestion_date}/"
+    },
+    {
+      "bundle": "deputados",
+      "name": "profissoes",
+      "table": "deputados__profissoes",
+      "prefix": "raw/deputados/profissoes/",
+      "location_template": "raw/deputados/profissoes/ingestion_date=${ingestion_date}/"
+    },
+    {
+      "bundle": "eventos",
+      "name": "deputados",
+      "table": "eventos__deputados",
+      "prefix": "raw/eventos/deputados/",
+      "location_template": "raw/eventos/deputados/ingestion_date=${ingestion_date}/"
+    },
+    {
+      "bundle": "eventos",
+      "name": "eventos",
+      "table": "eventos__eventos",
+      "prefix": "raw/eventos/eventos/",
+      "location_template": "raw/eventos/eventos/ingestion_date=${ingestion_date}/"
+    },
+    {
+      "bundle": "eventos",
+      "name": "ids",
+      "table": "eventos__ids",
+      "prefix": "raw/eventos/ids/",
+      "location_template": "raw/eventos/ids/ingestion_date=${ingestion_date}/"
+    },
+    {
+      "bundle": "eventos",
+      "name": "orgaos",
+      "table": "eventos__orgaos",
+      "prefix": "raw/eventos/orgaos/",
+      "location_template": "raw/eventos/orgaos/ingestion_date=${ingestion_date}/"
+    },
+    {
+      "bundle": "eventos",
+      "name": "pauta",
+      "table": "eventos__pauta",
+      "prefix": "raw/eventos/pauta/",
+      "location_template": "raw/eventos/pauta/ingestion_date=${ingestion_date}/"
+    },
+    {
+      "bundle": "eventos",
+      "name": "votacoes",
+      "table": "eventos__votacoes",
+      "prefix": "raw/eventos/votacoes/",
+      "location_template": "raw/eventos/votacoes/ingestion_date=${ingestion_date}/"
+    },
+    {
+      "bundle": "frentes",
+      "name": "frentes",
+      "table": "frentes__frentes",
+      "prefix": "raw/frentes/frentes/",
+      "location_template": "raw/frentes/frentes/ingestion_date=${ingestion_date}/"
+    },
+    {
+      "bundle": "frentes",
+      "name": "ids",
+      "table": "frentes__ids",
+      "prefix": "raw/frentes/ids/",
+      "location_template": "raw/frentes/ids/ingestion_date=${ingestion_date}/"
+    },
+    {
+      "bundle": "frentes",
+      "name": "membros",
+      "table": "frentes__membros",
+      "prefix": "raw/frentes/membros/",
+      "location_template": "raw/frentes/membros/ingestion_date=${ingestion_date}/"
+    },
+    {
+      "bundle": "grupos",
+      "name": "grupos",
+      "table": "grupos__grupos",
+      "prefix": "raw/grupos/grupos/",
+      "location_template": "raw/grupos/grupos/ingestion_date=${ingestion_date}/"
+    },
+    {
+      "bundle": "grupos",
+      "name": "historico",
+      "table": "grupos__historico",
+      "prefix": "raw/grupos/historico/",
+      "location_template": "raw/grupos/historico/ingestion_date=${ingestion_date}/"
+    },
+    {
+      "bundle": "grupos",
+      "name": "ids",
+      "table": "grupos__ids",
+      "prefix": "raw/grupos/ids/",
+      "location_template": "raw/grupos/ids/ingestion_date=${ingestion_date}/"
+    },
+    {
+      "bundle": "grupos",
+      "name": "membros",
+      "table": "grupos__membros",
+      "prefix": "raw/grupos/membros/",
+      "location_template": "raw/grupos/membros/ingestion_date=${ingestion_date}/"
+    },
+    {
+      "bundle": "legislaturas",
+      "name": "ids",
+      "table": "legislaturas__ids",
+      "prefix": "raw/legislaturas/ids/",
+      "location_template": "raw/legislaturas/ids/ingestion_date=${ingestion_date}/"
+    },
+    {
+      "bundle": "legislaturas",
+      "name": "legislaturas",
+      "table": "legislaturas__legislaturas",
+      "prefix": "raw/legislaturas/legislaturas/",
+      "location_template": "raw/legislaturas/legislaturas/ingestion_date=${ingestion_date}/"
+    },
+    {
+      "bundle": "legislaturas",
+      "name": "lideres",
+      "table": "legislaturas__lideres",
+      "prefix": "raw/legislaturas/lideres/",
+      "location_template": "raw/legislaturas/lideres/ingestion_date=${ingestion_date}/"
+    },
+    {
+      "bundle": "legislaturas",
+      "name": "mesa",
+      "table": "legislaturas__mesa",
+      "prefix": "raw/legislaturas/mesa/",
+      "location_template": "raw/legislaturas/mesa/ingestion_date=${ingestion_date}/"
+    },
+    {
+      "bundle": "orgaos",
+      "name": "codigo_situacao",
+      "table": "orgaos__codigo_situacao",
+      "prefix": "raw/orgaos/codigo_situacao/",
+      "location_template": "raw/orgaos/codigo_situacao/ingestion_date=${ingestion_date}/"
+    },
+    {
+      "bundle": "orgaos",
+      "name": "eventos",
+      "table": "orgaos__eventos",
+      "prefix": "raw/orgaos/eventos/",
+      "location_template": "raw/orgaos/eventos/ingestion_date=${ingestion_date}/"
+    },
+    {
+      "bundle": "orgaos",
+      "name": "ids",
+      "table": "orgaos__ids",
+      "prefix": "raw/orgaos/ids/",
+      "location_template": "raw/orgaos/ids/ingestion_date=${ingestion_date}/"
+    },
+    {
+      "bundle": "orgaos",
+      "name": "membros",
+      "table": "orgaos__membros",
+      "prefix": "raw/orgaos/membros/",
+      "location_template": "raw/orgaos/membros/ingestion_date=${ingestion_date}/"
+    },
+    {
+      "bundle": "orgaos",
+      "name": "orgaos",
+      "table": "orgaos__orgaos",
+      "prefix": "raw/orgaos/orgaos/",
+      "location_template": "raw/orgaos/orgaos/ingestion_date=${ingestion_date}/"
+    },
+    {
+      "bundle": "orgaos",
+      "name": "situacoes_orgao",
+      "table": "orgaos__situacoes_orgao",
+      "prefix": "raw/orgaos/situacoes_orgao/",
+      "location_template": "raw/orgaos/situacoes_orgao/ingestion_date=${ingestion_date}/"
+    },
+    {
+      "bundle": "orgaos",
+      "name": "votacoes",
+      "table": "orgaos__votacoes",
+      "prefix": "raw/orgaos/votacoes/",
+      "location_template": "raw/orgaos/votacoes/ingestion_date=${ingestion_date}/"
+    },
+    {
+      "bundle": "partidos",
+      "name": "ids",
+      "table": "partidos__ids",
+      "prefix": "raw/partidos/ids/",
+      "location_template": "raw/partidos/ids/ingestion_date=${ingestion_date}/"
+    },
+    {
+      "bundle": "partidos",
+      "name": "lideres",
+      "table": "partidos__lideres",
+      "prefix": "raw/partidos/lideres/",
+      "location_template": "raw/partidos/lideres/ingestion_date=${ingestion_date}/"
+    },
+    {
+      "bundle": "partidos",
+      "name": "membros",
+      "table": "partidos__membros",
+      "prefix": "raw/partidos/membros/",
+      "location_template": "raw/partidos/membros/ingestion_date=${ingestion_date}/"
+    },
+    {
+      "bundle": "partidos",
+      "name": "partidos",
+      "table": "partidos__partidos",
+      "prefix": "raw/partidos/partidos/",
+      "location_template": "raw/partidos/partidos/ingestion_date=${ingestion_date}/"
+    },
+    {
+      "bundle": "proposicoes",
+      "name": "codigo_situacao",
+      "table": "proposicoes__codigo_situacao",
+      "prefix": "raw/proposicoes/codigo_situacao/",
+      "location_template": "raw/proposicoes/codigo_situacao/ingestion_date=${ingestion_date}/"
+    },
+    {
+      "bundle": "proposicoes",
+      "name": "codigo_tema",
+      "table": "proposicoes__codigo_tema",
+      "prefix": "raw/proposicoes/codigo_tema/",
+      "location_template": "raw/proposicoes/codigo_tema/ingestion_date=${ingestion_date}/"
+    },
+    {
+      "bundle": "proposicoes",
+      "name": "codigo_tipo_autor",
+      "table": "proposicoes__codigo_tipo_autor",
+      "prefix": "raw/proposicoes/codigo_tipo_autor/",
+      "location_template": "raw/proposicoes/codigo_tipo_autor/ingestion_date=${ingestion_date}/"
+    },
+    {
+      "bundle": "proposicoes",
+      "name": "codigo_tipo_tramitacao",
+      "table": "proposicoes__codigo_tipo_tramitacao",
+      "prefix": "raw/proposicoes/codigo_tipo_tramitacao/",
+      "location_template": "raw/proposicoes/codigo_tipo_tramitacao/ingestion_date=${ingestion_date}/"
+    },
+    {
+      "bundle": "proposicoes",
+      "name": "ids",
+      "table": "proposicoes__ids",
+      "prefix": "raw/proposicoes/ids/",
+      "location_template": "raw/proposicoes/ids/ingestion_date=${ingestion_date}/"
+    },
+    {
+      "bundle": "proposicoes",
+      "name": "proposicoes",
+      "table": "proposicoes__proposicoes",
+      "prefix": "raw/proposicoes/proposicoes/",
+      "location_template": "raw/proposicoes/proposicoes/ingestion_date=${ingestion_date}/"
+    },
+    {
+      "bundle": "proposicoes",
+      "name": "sigla_tipo",
+      "table": "proposicoes__sigla_tipo",
+      "prefix": "raw/proposicoes/sigla_tipo/",
+      "location_template": "raw/proposicoes/sigla_tipo/ingestion_date=${ingestion_date}/"
+    },
+    {
+      "bundle": "proposicoes",
+      "name": "situacoes_proposicao",
+      "table": "proposicoes__situacoes_proposicao",
+      "prefix": "raw/proposicoes/situacoes_proposicao/",
+      "location_template": "raw/proposicoes/situacoes_proposicao/ingestion_date=${ingestion_date}/"
+    },
+    {
+      "bundle": "proposicoes",
+      "name": "tipos_autor",
+      "table": "proposicoes__tipos_autor",
+      "prefix": "raw/proposicoes/tipos_autor/",
+      "location_template": "raw/proposicoes/tipos_autor/ingestion_date=${ingestion_date}/"
+    },
+    {
+      "bundle": "proposicoes",
+      "name": "tipos_proposicao",
+      "table": "proposicoes__tipos_proposicao",
+      "prefix": "raw/proposicoes/tipos_proposicao/",
+      "location_template": "raw/proposicoes/tipos_proposicao/ingestion_date=${ingestion_date}/"
+    },
+    {
+      "bundle": "proposicoes",
+      "name": "tipos_tramitacao",
+      "table": "proposicoes__tipos_tramitacao",
+      "prefix": "raw/proposicoes/tipos_tramitacao/",
+      "location_template": "raw/proposicoes/tipos_tramitacao/ingestion_date=${ingestion_date}/"
+    },
+    {
+      "bundle": "votacoes",
+      "name": "ids",
+      "table": "votacoes__ids",
+      "prefix": "raw/votacoes/ids/",
+      "location_template": "raw/votacoes/ids/ingestion_date=${ingestion_date}/"
+    },
+    {
+      "bundle": "votacoes",
+      "name": "orientacoes",
+      "table": "votacoes__orientacoes",
+      "prefix": "raw/votacoes/orientacoes/",
+      "location_template": "raw/votacoes/orientacoes/ingestion_date=${ingestion_date}/"
+    },
+    {
+      "bundle": "votacoes",
+      "name": "votacoes",
+      "table": "votacoes__votacoes",
+      "prefix": "raw/votacoes/votacoes/",
+      "location_template": "raw/votacoes/votacoes/ingestion_date=${ingestion_date}/"
+    },
+    {
+      "bundle": "votacoes",
+      "name": "votos",
+      "table": "votacoes__votos",
+      "prefix": "raw/votacoes/votos/",
+      "location_template": "raw/votacoes/votos/ingestion_date=${ingestion_date}/"
+    }
+  ]
+}
